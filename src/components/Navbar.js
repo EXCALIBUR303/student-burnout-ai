@@ -20,6 +20,7 @@ function Navbar({ isLoggedIn, setIsLoggedIn }) {
 
         {isLoggedIn && <Link to="/dashboard">Dashboard</Link>}
         {isLoggedIn && <Link to="/predict">Predict</Link>}
+        {isLoggedIn && <Link to="/flowchart">System Flow</Link>}  {/* added */}
         {isLoggedIn && <button onClick={logout}>Logout</button>}
       </div>
     </nav>
