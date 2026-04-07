@@ -1,0 +1,43 @@
+.navbar {
+display: flex;
+justify-content: space-between;
+align-items: center;
+padding: 15px 40px;
+background: #4e73df;
+color: white;
+
+/* keeps navbar above particles */
+position: relative;
+z-index: 2;
+}
+
+.navbar h2 {
+margin: 0;
+}
+
+.navbar a {
+color: white;
+margin-left: 20px;
+text-decoration: none;
+font-weight: 500;
+transition: 0.3s;
+}
+
+.navbar a:hover {
+opacity: 0.8;
+}
+
+.navbar button {
+margin-left: 20px;
+padding: 6px 12px;
+background: white;
+color: #4e73df;
+border: none;
+cursor: pointer;
+border-radius: 5px;
+transition: 0.3s;
+}
+
+.navbar button:hover {
+transform: scale(1.05);
+}

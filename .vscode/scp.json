@@ -1,0 +1,8 @@
+{
+    "name": "EC2",
+    "host": "13.63.210.115",
+    "protocol": "scp",
+    "username": "ec2-user",
+    "remotePath": "/home/ec2-user/burnout-ml",
+    "privateKeyPath": "C:/Users/sidha/Downloads/burnout-key.pem"
+}
