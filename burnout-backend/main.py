@@ -131,6 +131,51 @@ def offline_chat(message: str) -> str:
     return _DEFAULT
 
 
+# ── ML insights helpers ───────────────────────────────────────────────────────
+
+_feature_importance_cache: list | None = None
+
+def get_cached_feature_importance() -> list:
+    global _feature_importance_cache
+    if _feature_importance_cache is None:
+        importances = model.feature_importances_
+        total_imp   = sum(importances) or 1.0
+        _feature_importance_cache = sorted(
+            [
+                {
+                    "feature":    name,
+                    "label":      FEATURE_META[name]["label"],
+                    "emoji":      FEATURE_META[name]["emoji"],
+                    "importance": round(float(imp / total_imp * 100), 1),
+                }
+                for name, imp in zip(FEATURE_NAMES, importances)
+            ],
+            key=lambda x: x["importance"],
+            reverse=True,
+        )
+    return _feature_importance_cache
+
+
+def compute_trend(user_id: int) -> dict | None:
+    cursor.execute(
+        "SELECT result FROM predictions WHERE user_id = ? ORDER BY created_at ASC",
+        (user_id,),
+    )
+    rows = cursor.fetchall()
+    if len(rows) < 3:
+        return None
+    risk_map = {"Low": 0, "Medium": 1, "High": 2}
+    values   = [risk_map.get(r[0], 1) for r in rows]
+    n        = len(values)
+    slope    = (values[-1] - values[0]) / max(n - 1, 1)
+    direction = "improving" if slope < -0.2 else "worsening" if slope > 0.2 else "stable"
+    return {
+        "direction": direction,
+        "slope":     round(slope, 3),
+        "values":    [{"index": i + 1, "risk": v} for i, v in enumerate(values[-10:])],
+        "count":     n,
+    }
+
 # ── Auth helpers ──────────────────────────────────────────────────────────────
 
 def hash_password(plain: str) -> str:
@@ -228,6 +273,15 @@ def me(request: Request):
         from fastapi import HTTPException
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     return {"id": user["sub"], "email": user["email"]}
+
+
+@app.get("/insights")
+def insights(request: Request):
+    result: dict = {"feature_importance": get_cached_feature_importance(), "trend": None}
+    user = get_user_from_request(request)
+    if user:
+        result["trend"] = compute_trend(user["sub"])
+    return result
 
 
 @app.get("/data")
