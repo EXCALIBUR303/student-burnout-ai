@@ -451,7 +451,7 @@ function Flowchart() {
                   whileTap={{ scale: 0.97 }}
                   transition={{ type: "spring", stiffness: 340, damping: 22 }}
                   style={{
-                    display: "flex", alignItems: "center", gap: 14,
+                    display: "flex", flexDirection: "column", gap: 14,
                     background: "rgba(255,255,255,0.06)",
                     backdropFilter: "blur(8px)",
                     borderRadius: "var(--r-md)",
@@ -460,30 +460,32 @@ function Flowchart() {
                     cursor: "pointer",
                   }}
                 >
-                  <div style={{
-                    width: 48, height: 48, borderRadius: "50%", flexShrink: 0,
-                    background: c.grad,
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-                    display: "grid", placeItems: "center", fontSize: 22,
-                  }}>{c.emoji}</div>
-
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", marginBottom: 2 }}>{c.name}</div>
-                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)" }}>{c.role}</div>
+                  {/* Avatar + name row */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{
+                      width: 44, height: 44, borderRadius: "50%", flexShrink: 0,
+                      background: c.grad,
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                      display: "grid", placeItems: "center", fontSize: 20,
+                    }}>{c.emoji}</div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", marginBottom: 2 }}>{c.name}</div>
+                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)" }}>{c.role}</div>
+                    </div>
                   </div>
 
-                  <motion.div
-                    whileHover={{ scale: 1.06 }}
+                  {/* Book button — full width on its own row */}
+                  <div
                     style={{
-                      padding: "9px 18px", borderRadius: 999, fontSize: 12, fontWeight: 800,
+                      width: "100%", padding: "10px 0", borderRadius: 999, fontSize: 13, fontWeight: 800,
                       background: "linear-gradient(90deg,#ef4444,#f97316)",
-                      color: "#fff", flexShrink: 0,
+                      color: "#fff", textAlign: "center",
                       boxShadow: "0 4px 14px rgba(239,68,68,0.45)",
                       letterSpacing: "0.02em",
                     }}
                   >
-                    Book Free →
-                  </motion.div>
+                    Book Free Session →
+                  </div>
                 </motion.div>
               </a>
             ))}
