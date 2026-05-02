@@ -167,6 +167,52 @@ def home():
     return {"message": "Burnout AI API running"}
 
 
+@app.post("/register")
+def register(data: dict):
+    email = str(data.get("email", "")).strip().lower()
+    password = str(data.get("password", ""))
+
+    if not email or not password:
+        return {"error": "Email and password are required"}
+    if len(password) < 6:
+        return {"error": "Password must be at least 6 characters"}
+
+    try:
+        hashed = hash_password(password)
+        cursor.execute(
+            "INSERT INTO users (email, password_hash) VALUES (?, ?)",
+            (email, hashed),
+        )
+        conn.commit()
+        return {"message": "Account created successfully"}
+    except Exception:
+        return {"error": "Email already registered"}
+
+
+@app.post("/login")
+def login(data: dict):
+    email = str(data.get("email", "")).strip().lower()
+    password = str(data.get("password", ""))
+
+    cursor.execute("SELECT id, password_hash FROM users WHERE email = ?", (email,))
+    row = cursor.fetchone()
+
+    if not row or not verify_password(password, row[1]):
+        return {"error": "Invalid email or password"}
+
+    token = create_token(user_id=row[0], email=email)
+    return {"token": token, "email": email}
+
+
+@app.get("/me")
+def me(request: Request):
+    user = get_user_from_request(request)
+    if not user:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    return {"id": user["sub"], "email": user["email"]}
+
+
 @app.get("/data")
 def get_dashboard_data():
     try:
