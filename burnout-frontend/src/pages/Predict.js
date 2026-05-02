@@ -121,7 +121,9 @@ function Predict() {
     localStorage.setItem("burnoutFeatures", JSON.stringify(mapped));
 
     try {
-      const { data } = await axios.post(`${API_BASE}/predict`, mapped);
+      const token = localStorage.getItem("token");
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const { data } = await axios.post(`${API_BASE}/predict`, mapped, { headers });
       const label = data.prediction === "High" ? "High Burnout"
                   : data.prediction === "Medium" ? "Medium Burnout"
                   : "Low Burnout";
