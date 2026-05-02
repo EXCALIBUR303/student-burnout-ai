@@ -244,7 +244,12 @@ export default function Dashboard() {
 
     // Try /history endpoint
     try {
-      const res = await axios.get(`${API_BASE}/history`, { timeout: 5000 });
+      const token = localStorage.getItem("token");
+      const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await axios.get(`${API_BASE}/history`, {
+        timeout: 5000,
+        headers: authHeaders,
+      });
       if (Array.isArray(res.data)) histData = res.data;
     } catch {}
 
