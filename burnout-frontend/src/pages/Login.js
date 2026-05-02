@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useToast } from "../context/ToastContext";
+import API_BASE from "../utils/api";
 import "../App.css";
 
 const BRAND_FEATURES = [
@@ -19,20 +20,34 @@ function Login({ setIsLoggedIn }) {
   const { toast }               = useToast();
   const navigate                = useNavigate();
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     if (!email || !password) {
       toast.error("Missing info", "Please enter both email and password");
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      localStorage.setItem("token", "demo-token");
+    try {
+      const res = await fetch(`${API_BASE}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        toast.error("Login failed", data.error);
+        return;
+      }
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("userEmail", data.email);
       setIsLoggedIn(true);
       toast.success("Welcome back 👋", "Logged in successfully");
-      setLoading(false);
       navigate("/dashboard");
-    }, 700);
+    } catch {
+      toast.error("Connection error", "Could not reach the server");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -109,10 +124,6 @@ function Login({ setIsLoggedIn }) {
 
           <div className="login-links">
             <p onClick={() => navigate("/register")}>New here? Create an account →</p>
-          </div>
-
-          <div className="auth-demo-note">
-            <span>💡</span> Demo mode — any email + password works
           </div>
         </motion.div>
       </div>
