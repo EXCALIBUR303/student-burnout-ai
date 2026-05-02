@@ -9,6 +9,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   PieChart, Pie, Cell,
   ScatterChart, Scatter,
+  LineChart, Line,
   ResponsiveContainer,
 } from "recharts";
 import Badge from "../components/Badge";
@@ -201,6 +202,7 @@ export default function Dashboard() {
   const [dsStats,    setDsStats]    = useState(null);
   const [history,    setHistory]    = useState([]);
   const [loading,    setLoading]    = useState(true);
+  const [insights,   setInsights]   = useState(null);
   const [backendOk,  setBackendOk]  = useState(null);
   const [dataSource, setDataSource] = useState("live"); // "live" | "csv" | "cached"
   const [lastUpdate, setLastUpdate] = useState(new Date());
@@ -258,6 +260,14 @@ export default function Dashboard() {
       histData = getLocalHistory();
     }
 
+    // Fetch ML insights (feature importance + trend)
+    try {
+      const token3 = localStorage.getItem("token");
+      const insHeaders = token3 ? { Authorization: `Bearer ${token3}` } : {};
+      const insRes = await axios.get(`${API_BASE}/insights`, { timeout: 5000, headers: insHeaders });
+      setInsights(insRes.data);
+    } catch {}
+
     setDsStats(statsData);
     setHistory(histData);
     setBackendOk(online);
@@ -273,6 +283,15 @@ export default function Dashboard() {
   const histMed  = history.filter(p => p.result === "Medium" || p.result === "Moderate").length;
   const histLow  = history.filter(p => p.result === "Low").length;
   const lastPred = history[0] || null;
+
+  // Risk Over Time — map history results to numeric for line chart
+  const RISK_NUM = { Low: 0, Medium: 1, Moderate: 1, High: 2 };
+  const riskTimeline = [...history].reverse().map((p, i) => ({
+    index: i + 1,
+    risk:  RISK_NUM[p.result] ?? 1,
+    label: p.result,
+    date:  p.created_at ? p.created_at.slice(0, 10) : `#${i + 1}`,
+  }));
 
   // Group predictions by date for timeline chart
   const histByDay = (() => {
@@ -613,6 +632,39 @@ export default function Dashboard() {
               </div>
             </div>
 
+
+            {/* Feature Importance */}
+            {insights?.feature_importance?.length > 0 && (
+              <div className="chart-card" style={{ marginTop: 20 }}>
+                <h3 className="chart-title">🧠 What drives burnout most?</h3>
+                <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 16 }}>
+                  Global feature importance from the XGBoost model
+                </p>
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart
+                    layout="vertical"
+                    data={insights.feature_importance}
+                    margin={{ top: 4, right: 24, left: 8, bottom: 4 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+                    <XAxis type="number" tick={{ fill: AXIS, fontSize: 11 }} tickLine={false}
+                      tickFormatter={(v) => `${v}%`} />
+                    <YAxis type="category" dataKey="label" width={130}
+                      tick={{ fill: "var(--text-muted)", fontSize: 12 }} tickLine={false} />
+                    <Tooltip contentStyle={TT} formatter={(v) => [`${v}%`, "Importance"]} />
+                    <defs>
+                      <linearGradient id="importanceGrad" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="var(--accent-1)" />
+                        <stop offset="100%" stopColor="#00d4ff" />
+                      </linearGradient>
+                    </defs>
+                    <Bar dataKey="importance" radius={[0, 6, 6, 0]}
+                      fill="url(#importanceGrad)" maxBarSize={22} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
           </motion.div>
         )}
 
@@ -646,6 +698,36 @@ export default function Dashboard() {
                   <MiniStatCard label="Medium Risk"        icon="⚡" value={histMed}         color="#f59e0b"         delay={0.14} />
                   <MiniStatCard label="Low Risk"           icon="✅" value={histLow}         color="#22c55e"         delay={0.21} />
                 </div>
+
+                {/* Risk Over Time */}
+                {riskTimeline.length >= 2 && (
+                  <div className="chart-card" style={{ marginBottom: 20 }}>
+                    <h3 className="chart-title">📈 Risk Over Time</h3>
+                    <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 8 }}>
+                      Your burnout risk across all assessments
+                    </p>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <LineChart data={riskTimeline} margin={{ top: 8, right: 16, left: -20, bottom: 4 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                        <XAxis dataKey="date" tick={{ fill: AXIS, fontSize: 11 }} tickLine={false} />
+                        <YAxis
+                          domain={[0, 2]} ticks={[0, 1, 2]}
+                          tickFormatter={(v) => ["Low", "Med", "High"][v]}
+                          tick={{ fill: AXIS, fontSize: 11 }} tickLine={false}
+                        />
+                        <Tooltip
+                          contentStyle={TT}
+                          formatter={(v) => [["Low", "Medium", "High"][v], "Risk"]}
+                        />
+                        <Line
+                          type="monotone" dataKey="risk" stroke="var(--accent-1)"
+                          strokeWidth={2.5} dot={{ r: 4, fill: "var(--accent-1)", strokeWidth: 0 }}
+                          activeDot={{ r: 6 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
 
                 {/* Latest prediction banner */}
                 {lastPred && (
