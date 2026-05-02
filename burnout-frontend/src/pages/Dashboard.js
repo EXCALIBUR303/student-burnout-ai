@@ -9,7 +9,6 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   PieChart, Pie, Cell,
   ScatterChart, Scatter,
-  LineChart, Line,
   ResponsiveContainer,
 } from "recharts";
 import Badge from "../components/Badge";
@@ -196,7 +195,7 @@ function getLocalHistory() {
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export default function Dashboard() {
-  const { toast } = useToast();
+  useToast();
 
   const [tab,        setTab]        = useState("dataset");
   const [dsStats,    setDsStats]    = useState(null);
