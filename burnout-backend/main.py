@@ -26,6 +26,23 @@ app.add_middleware(
 model = joblib.load("stress_model.pkl")
 labels = {0: "Low", 1: "Medium", 2: "High"}
 
+FEATURE_NAMES = [
+    "study_hours_per_day", "sleep_hours_per_day", "social_hours_per_day",
+    "physical_activity_hours_per_day", "study_sleep_ratio",
+    "active_hours", "rest_ratio", "productive_vs_leisure",
+]
+
+FEATURE_META = {
+    "study_hours_per_day":             {"label": "Study load",         "emoji": "📚", "avg": 6.5,  "high_is_risk": True},
+    "sleep_hours_per_day":             {"label": "Sleep hours",        "emoji": "😴", "avg": 7.5,  "high_is_risk": False},
+    "social_hours_per_day":            {"label": "Social time",        "emoji": "👥", "avg": 2.0,  "high_is_risk": False},
+    "physical_activity_hours_per_day": {"label": "Physical activity",  "emoji": "🏃", "avg": 1.2,  "high_is_risk": False},
+    "study_sleep_ratio":               {"label": "Study/sleep ratio",  "emoji": "⚖️", "avg": 0.9,  "high_is_risk": True},
+    "active_hours":                    {"label": "Active hours",       "emoji": "⚡", "avg": 7.7,  "high_is_risk": False},
+    "rest_ratio":                      {"label": "Rest ratio",         "emoji": "🌙", "avg": 0.7,  "high_is_risk": False},
+    "productive_vs_leisure":           {"label": "Productivity ratio", "emoji": "🎯", "avg": 2.0,  "high_is_risk": True},
+}
+
 # ===== DATABASE =====
 conn = sqlite3.connect("burnout.db", check_same_thread=False)
 cursor = conn.cursor()
@@ -361,7 +378,7 @@ def predict(data: dict, request: Request):
 
         total = study + sleep + social + physical or 1.0
 
-        df = pd.DataFrame([{
+        feature_vals = {
             "study_hours_per_day":              study,
             "sleep_hours_per_day":              sleep,
             "social_hours_per_day":             social,
@@ -370,12 +387,46 @@ def predict(data: dict, request: Request):
             "active_hours":                     study + physical,
             "rest_ratio":                       (sleep + physical) / total,
             "productive_vs_leisure":            study / (social + physical + 0.1),
-        }])
+        }
+
+        df = pd.DataFrame([feature_vals])
 
         prediction   = model.predict(df)[0]
         result_label = labels.get(int(prediction), "Unknown")
 
-        user = get_user_from_request(request)
+        # ── Confidence ────────────────────────────────────────────────
+        proba      = model.predict_proba(df)[0]
+        confidence = round(float(max(proba)) * 100, 1)
+        probabilities = {
+            "low":    round(float(proba[0]) * 100, 1),
+            "medium": round(float(proba[1]) * 100, 1),
+            "high":   round(float(proba[2]) * 100, 1),
+        }
+
+        # ── Top drivers ───────────────────────────────────────────────
+        importances = model.feature_importances_
+        total_imp   = sum(importances) or 1.0
+        ranked      = sorted(
+            zip(FEATURE_NAMES, importances),
+            key=lambda x: x[1], reverse=True
+        )
+        top_drivers = []
+        for fname, imp in ranked[:3]:
+            meta       = FEATURE_META[fname]
+            val        = feature_vals[fname]
+            concerning = (val > meta["avg"]) if meta["high_is_risk"] else (val < meta["avg"])
+            top_drivers.append({
+                "feature":        fname,
+                "label":          meta["label"],
+                "emoji":          meta["emoji"],
+                "value":          round(val, 2),
+                "avg":            meta["avg"],
+                "direction":      "risk" if concerning else "ok",
+                "importance_pct": round(float(imp / total_imp * 100), 1),
+            })
+
+        # ── Persist ───────────────────────────────────────────────────
+        user    = get_user_from_request(request)
         user_id = user["sub"] if user else None
         cursor.execute(
             "INSERT INTO predictions (study, sleep, social, physical, result, user_id) VALUES (?,?,?,?,?,?)",
@@ -383,7 +434,13 @@ def predict(data: dict, request: Request):
         )
         conn.commit()
 
-        return {"prediction": result_label, "risk": int(prediction)}
+        return {
+            "prediction":    result_label,
+            "risk":          int(prediction),
+            "confidence":    confidence,
+            "probabilities": probabilities,
+            "top_drivers":   top_drivers,
+        }
 
     except Exception as e:
         return {"error": str(e)}
