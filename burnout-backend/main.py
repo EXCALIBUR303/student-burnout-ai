@@ -1,8 +1,16 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 import joblib
 import pandas as pd
 import sqlite3
+import bcrypt
+import jwt
+import os
+from datetime import datetime, timedelta, timezone
+
+JWT_SECRET = os.environ.get("JWT_SECRET", "dev-secret-change-in-prod")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRY_DAYS = 7
 
 app = FastAPI()
 
@@ -34,6 +42,25 @@ cursor.execute("""
 """)
 conn.commit()
 print("[OK] SQLite database ready (burnout.db)")
+
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        email      TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+""")
+conn.commit()
+print("[OK] Users table ready")
+
+# Migrate predictions table: add user_id column if missing
+try:
+    cursor.execute("ALTER TABLE predictions ADD COLUMN user_id INTEGER REFERENCES users(id)")
+    conn.commit()
+    print("[OK] Added user_id column to predictions")
+except Exception:
+    pass  # Column already exists
 
 
 # ===== CHATBOT =====
@@ -85,6 +112,41 @@ def offline_chat(message: str) -> str:
         if keyword in msg:
             return reply
     return _DEFAULT
+
+
+# ── Auth helpers ──────────────────────────────────────────────────────────────
+
+def hash_password(plain: str) -> str:
+    return bcrypt.hashpw(plain.encode(), bcrypt.gensalt(rounds=12)).decode()
+
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return bcrypt.checkpw(plain.encode(), hashed.encode())
+
+
+def create_token(user_id: int, email: str) -> str:
+    payload = {
+        "sub": user_id,
+        "email": email,
+        "exp": datetime.now(timezone.utc) + timedelta(days=JWT_EXPIRY_DAYS),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def decode_token(token: str) -> dict | None:
+    """Returns payload dict or None if invalid/expired."""
+    try:
+        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.PyJWTError:
+        return None
+
+
+def get_user_from_request(request) -> dict | None:
+    """Extract and validate Bearer token from request headers."""
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+    return decode_token(auth[7:])
 
 
 # ===== HELPERS =====
