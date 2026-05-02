@@ -1,0 +1,188 @@
+/* ================================================================
+   Navbar — refined, theme-aware, with animated active indicator
+   ================================================================ */
+
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 32px;
+  height: var(--nav-h, 72px);
+  background: color-mix(in srgb, var(--bg) 75%, transparent);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  color: var(--text);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+/* Fallback for browsers without color-mix */
+@supports not (background: color-mix(in srgb, red 50%, blue)) {
+  [data-theme="dark"]  .navbar { background: rgba(7, 8, 15, 0.75); }
+  [data-theme="light"] .navbar { background: rgba(247, 247, 242, 0.75); }
+}
+
+.navbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  text-decoration: none;
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.brand-dim {
+  color: var(--text-dim);
+  font-weight: 500;
+}
+
+.navbar-logo { font-size: 22px; }
+
+.navbar-links {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+}
+
+.navbar-links a {
+  color: var(--text-muted);
+  padding: 8px 14px;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 14px;
+  border-radius: var(--r-sm);
+  transition: color 0.2s, background 0.2s;
+  position: relative;
+  z-index: 1;
+}
+
+.navbar-links a:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.navbar-links a.active { color: var(--text); }
+
+/* Animated underline indicator (positioned via JS) */
+.nav-indicator {
+  position: absolute;
+  bottom: -20px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--grad-primary);
+  box-shadow: var(--glow-violet);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* CTA */
+.navbar-links a.nav-cta {
+  background: var(--grad-primary);
+  color: var(--text-on-accent);
+  margin-left: 8px;
+  padding: 8px 16px;
+  font-weight: 600;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.navbar-links a.nav-cta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(124, 92, 255, 0.45);
+  background: var(--grad-primary);
+}
+
+/* Logout */
+.nav-logout {
+  margin-left: 8px;
+  padding: 8px 14px;
+  width: auto;
+  background: var(--surface);
+  color: var(--text-muted);
+  border: 1px solid var(--border-strong);
+  cursor: pointer;
+  border-radius: var(--r-sm);
+  font-weight: 500;
+  font-size: 13px;
+  transition: 0.2s;
+  box-shadow: none;
+}
+
+.nav-logout::before { display: none; }
+
+.nav-logout:hover:not(:disabled) {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-color: var(--danger);
+  transform: none;
+  box-shadow: none;
+}
+
+/* Hamburger */
+.navbar-toggle {
+  display: none;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  font-size: 18px;
+  cursor: pointer;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: var(--r-sm);
+  box-shadow: none;
+}
+
+.navbar-toggle::before { display: none; }
+
+.navbar-toggle:hover { background: var(--surface-hover); transform: none; box-shadow: none; }
+
+/* Mobile */
+@media (max-width: 768px) {
+  .navbar { padding: 0 16px; }
+
+  .navbar-toggle { display: grid; place-items: center; }
+
+  .nav-indicator { display: none; }
+
+  .navbar-links {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    background: var(--bg-elevated);
+    padding: 16px;
+    gap: 4px;
+    border-bottom: 1px solid var(--border);
+    transform: translateY(-12px);
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.25s ease;
+    box-shadow: var(--shadow-lg);
+  }
+
+  .navbar-links.open {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .navbar-links a,
+  .navbar-links .nav-logout {
+    width: 100%;
+    text-align: left;
+    margin-left: 0;
+    padding: 12px 14px;
+    font-size: 15px;
+  }
+
+  .theme-toggle { align-self: flex-start; margin-top: 4px; }
+}
