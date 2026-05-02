@@ -107,6 +107,10 @@ function Flowchart() {
   const [loadingPlan, setLoadingPlan] = useState(true);
   const [expandedStep, setExpandedStep] = useState(null);   // which step has tips open
   const [dailyTip] = useState(() => DAILY_TIPS[new Date().getDate() % DAILY_TIPS.length]);
+  const [showMediumPopup, setShowMediumPopup] = useState(() => {
+    const result = localStorage.getItem("burnoutResult") || "";
+    return result === "Medium Burnout" && !sessionStorage.getItem("mediumPopupDismissed");
+  });
 
   const result   = localStorage.getItem("burnoutResult")  || "Low Burnout";
   const risk     = parseInt(localStorage.getItem("burnoutRisk") || "0");
@@ -243,7 +247,7 @@ function Flowchart() {
     : result === "Medium Burnout" ? "rgba(245,158,11,0.08)" : "rgba(34,197,94,0.08)";
 
   return (
-    <div className="dashboard-container">
+    <><div className="dashboard-container">
 
       {/* ── Header ── */}
       <div className="row-between" style={{ marginBottom: 20 }}>
@@ -254,7 +258,7 @@ function Flowchart() {
         <Badge variant={variant}>{result}</Badge>
       </div>
 
-      {/* ── Counsellor Banner (High Burnout only) ── */}
+      {/* ── Counsellor Banner (High Burnout — recommended) ── */}
       {result === "High Burnout" && (
         <motion.div
           initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
@@ -275,13 +279,13 @@ function Flowchart() {
             }}>🧑‍⚕️</div>
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#ef4444", marginBottom: 4 }}>
-                Professional Support Available
+                ✦ Recommended for You
               </div>
               <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", marginBottom: 3 }}>
-                High burnout detected — talk to a Woxsen wellness counsellor
+                Speaking with a counsellor can help right now
               </div>
               <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.55 }}>
-                Free confidential sessions for Woxsen students. Book directly via Calendly — no referral needed.
+                Based on your High burnout result, we recommend a free confidential session with one of Woxsen's wellness counsellors. No referral needed — book directly.
               </div>
             </div>
           </div>
@@ -770,6 +774,102 @@ function Flowchart() {
       </div>
 
     </div>
+
+      {/* ── Medium Burnout mini-popup (bottom-right, dismissible) ── */}
+
+      <AnimatePresence>
+        {showMediumPopup && (
+          <motion.div
+            initial={{ opacity: 0, y: 40, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 40, scale: 0.95 }}
+            transition={{ type: "spring", stiffness: 320, damping: 28 }}
+            style={{
+              position: "fixed", bottom: 28, right: 24, zIndex: 1000,
+              width: 320, borderRadius: "var(--r-lg)",
+              background: "var(--bg-elevated)",
+              border: "1px solid rgba(245,158,11,0.4)",
+              borderLeft: "4px solid #f59e0b",
+              boxShadow: "0 16px 48px rgba(0,0,0,0.35)",
+              padding: "16px 18px",
+            }}
+          >
+            {/* Close button */}
+            <button
+              onClick={() => {
+                sessionStorage.setItem("mediumPopupDismissed", "true");
+                setShowMediumPopup(false);
+              }}
+              style={{
+                position: "absolute", top: 10, right: 12,
+                background: "none", border: "none", cursor: "pointer",
+                color: "var(--text-dim)", fontSize: 18, lineHeight: 1,
+                padding: 4,
+              }}
+              aria-label="Dismiss"
+            >×</button>
+
+            <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 12 }}>
+              <div style={{
+                width: 38, height: 38, borderRadius: "50%", flexShrink: 0,
+                background: "rgba(245,158,11,0.15)", border: "2px solid #f59e0b",
+                display: "grid", placeItems: "center", fontSize: 18,
+              }}>💬</div>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#f59e0b", marginBottom: 4 }}>
+                  Just a thought
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 4, lineHeight: 1.4 }}>
+                  Feeling stressed? A quick chat helps.
+                </div>
+                <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                  Woxsen's wellness team offers free sessions — even for medium stress, talking early makes a difference.
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <a href="https://calendly.com/wellness-centre-ryu/counselling" target="_blank" rel="noopener noreferrer"
+                style={{ textDecoration: "none" }}>
+                <motion.div whileHover={{ x: 3 }} style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "9px 14px", borderRadius: "var(--r-md)",
+                  background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)",
+                  cursor: "pointer",
+                }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>Dr. Poorva Shinde</div>
+                    <div style={{ fontSize: 10, color: "var(--text-dim)" }}>Director — Wellness</div>
+                  </div>
+                  <span style={{ fontSize: 12, color: "#f59e0b", fontWeight: 700 }}>Book →</span>
+                </motion.div>
+              </a>
+
+              <a href="https://calendly.com/mohua-das-woxsen/new-meeting" target="_blank" rel="noopener noreferrer"
+                style={{ textDecoration: "none" }}>
+                <motion.div whileHover={{ x: 3 }} style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "9px 14px", borderRadius: "var(--r-md)",
+                  background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)",
+                  cursor: "pointer",
+                }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>Ms. Mohua Das</div>
+                    <div style={{ fontSize: 10, color: "var(--text-dim)" }}>Wellness Program Officer</div>
+                  </div>
+                  <span style={{ fontSize: 12, color: "#f59e0b", fontWeight: 700 }}>Book →</span>
+                </motion.div>
+              </a>
+            </div>
+
+            <div style={{ marginTop: 10, fontSize: 10, color: "var(--text-dim)", textAlign: "center" }}>
+              Free · Confidential · No referral needed
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+    </>
   );
 }
 
