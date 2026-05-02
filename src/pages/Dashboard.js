@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import "../App.css";
 import axios from "axios";
+import API_BASE from "../utils/api";
 import CountUp from "react-countup";
 import GaugeChart from "react-gauge-chart";
 import { motion, AnimatePresence } from "framer-motion";
@@ -94,6 +95,104 @@ function MiniStatCard({ label, icon, value, decimals = 0, color, delay = 0 }) {
   );
 }
 
+// ─── Compute /stats shape from raw /data rows (CSV fallback) ─────────────────
+
+function computeStatsFromRows(rows) {
+  if (!rows || rows.length === 0) return null;
+  const total = rows.length;
+
+  // Flexible key finder
+  const key = (keywords) => {
+    const k = Object.keys(rows[0]).find(c =>
+      keywords.some(kw => c.toLowerCase().replace(/ /g, "_").includes(kw))
+    );
+    return k;
+  };
+
+  const stressKey   = key(["stress_level", "stress"]);
+  const studyKey    = key(["study"]);
+  const sleepKey    = key(["sleep"]);
+  const gpaKey      = key(["gpa"]);
+  const physKey     = key(["physical"]);
+  const socialKey   = key(["social"]);
+
+  const avg = (k) => k ? rows.reduce((s, r) => s + (parseFloat(r[k]) || 0), 0) / total : 0;
+
+  const counts = { Low: 0, Moderate: 0, High: 0 };
+  if (stressKey) rows.forEach(r => { const v = r[stressKey]; if (counts[v] !== undefined) counts[v]++; });
+
+  const studyBuckets  = { "0-3h": 0, "3-5h": 0, "5-7h": 0, "7-9h": 0, "9+h": 0 };
+  const sleepBuckets  = { "<5h": 0, "5-6h": 0, "6-7h": 0, "7-8h": 0, "8-9h": 0, "9+h": 0 };
+
+  rows.forEach(r => {
+    const sv = parseFloat(r[studyKey]) || 0;
+    if      (sv < 3) studyBuckets["0-3h"]++;
+    else if (sv < 5) studyBuckets["3-5h"]++;
+    else if (sv < 7) studyBuckets["5-7h"]++;
+    else if (sv < 9) studyBuckets["7-9h"]++;
+    else             studyBuckets["9+h"]++;
+
+    const sl = parseFloat(r[sleepKey]) || 0;
+    if      (sl < 5) sleepBuckets["<5h"]++;
+    else if (sl < 6) sleepBuckets["5-6h"]++;
+    else if (sl < 7) sleepBuckets["6-7h"]++;
+    else if (sl < 8) sleepBuckets["7-8h"]++;
+    else if (sl < 9) sleepBuckets["8-9h"]++;
+    else             sleepBuckets["9+h"]++;
+  });
+
+  const gpaByStress = ["Low", "Moderate", "High"].map(level => {
+    const subset = rows.filter(r => r[stressKey] === level);
+    return {
+      level,
+      avg_gpa: subset.length ? +(subset.reduce((s, r) => s + (parseFloat(r[gpaKey]) || 0), 0) / subset.length).toFixed(2) : 0,
+      count: subset.length,
+    };
+  }).filter(g => g.count > 0);
+
+  // 80-point scatter sample
+  const sample = rows.sort(() => 0.5 - Math.random()).slice(0, 80);
+  const scatter = studyKey && sleepKey && stressKey
+    ? sample.map(r => ({ study: +(parseFloat(r[studyKey])||0).toFixed(1), sleep: +(parseFloat(r[sleepKey])||0).toFixed(1), stress: r[stressKey] }))
+    : [];
+
+  return {
+    total,
+    high:         counts.High,
+    moderate:     counts.Moderate,
+    low:          counts.Low,
+    high_pct:     +((counts.High / total) * 100).toFixed(1),
+    moderate_pct: +((counts.Moderate / total) * 100).toFixed(1),
+    low_pct:      +((counts.Low / total) * 100).toFixed(1),
+    avg_study:    +avg(studyKey).toFixed(2),
+    avg_sleep:    +avg(sleepKey).toFixed(2),
+    avg_gpa:      +avg(gpaKey).toFixed(2),
+    avg_physical: +avg(physKey).toFixed(2),
+    avg_social:   +avg(socialKey).toFixed(2),
+    avg_extra:    0,
+    study_dist:   Object.entries(studyBuckets).map(([range, count]) => ({ range, count })),
+    sleep_dist:   Object.entries(sleepBuckets).map(([range, count]) => ({ range, count })),
+    gpa_by_stress: gpaByStress,
+    scatter_sample: scatter,
+  };
+}
+
+// Build a minimal history array from localStorage (last prediction made on this device)
+function getLocalHistory() {
+  const result   = localStorage.getItem("burnoutResult");
+  const features = JSON.parse(localStorage.getItem("burnoutFeatures") || "null");
+  if (!result || !features) return [];
+  return [{
+    id: 1,
+    study:    features.study_hours_per_day      || 0,
+    sleep:    features.sleep_hours_per_day      || 0,
+    social:   features.social_hours_per_day     || 0,
+    physical: features.physical_activity_hours_per_day || 0,
+    result:   result.replace(" Burnout", "").replace(" Risk", ""),
+    created_at: new Date().toISOString().slice(0, 16).replace("T", " "),
+  }];
+}
+
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export default function Dashboard() {
@@ -103,38 +202,65 @@ export default function Dashboard() {
   const [dsStats,    setDsStats]    = useState(null);
   const [history,    setHistory]    = useState([]);
   const [loading,    setLoading]    = useState(true);
-  const [backendOk,  setBackendOk]  = useState(null);     // null=checking true=ok false=down
+  const [backendOk,  setBackendOk]  = useState(null);
+  const [dataSource, setDataSource] = useState("live"); // "live" | "csv" | "cached"
   const [lastUpdate, setLastUpdate] = useState(new Date());
 
-  // ── Fetch both data sources in parallel ──
+  // ── Smart fetch: /stats → /data (old Railway) → FALLBACK ──
   const fetchAll = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
+
+    let statsData  = null;
+    let histData   = null;
+    let online     = false;
+    let source     = "cached";
+
+    // 1. Try new /stats endpoint (new Railway or local backend)
     try {
-      const [statsRes, histRes] = await Promise.allSettled([
-        axios.get("/stats"),
-        axios.get("/history"),
-      ]);
-
-      if (statsRes.status === "fulfilled" && !statsRes.value.data.error) {
-        setDsStats(statsRes.value.data);
-        setBackendOk(true);
-      } else {
-        setDsStats(FALLBACK);
-        setBackendOk(false);
-        if (!silent) toast.warning("Offline mode", "Showing cached dataset — backend unreachable.");
+      const res = await axios.get(`${API_BASE}/stats`, { timeout: 6000 });
+      if (res.data && !res.data.error && res.data.total) {
+        statsData = res.data;
+        online    = true;
+        source    = "live";
       }
+    } catch {}
 
-      if (histRes.status === "fulfilled" && Array.isArray(histRes.value.data)) {
-        setHistory(histRes.value.data);
-      }
-      setLastUpdate(new Date());
-    } catch {
-      setDsStats(FALLBACK);
-      setBackendOk(false);
-    } finally {
-      setTimeout(() => setLoading(false), 350);
+    // 2. Fall back to /data (old Railway — always had this endpoint)
+    if (!statsData) {
+      try {
+        const res = await axios.get(`${API_BASE}/data`, { timeout: 8000 });
+        if (Array.isArray(res.data) && res.data.length > 0) {
+          statsData = computeStatsFromRows(res.data);
+          online    = true;
+          source    = "csv";
+        }
+      } catch {}
     }
-  }, [toast]);
+
+    // 3. Use hardcoded fallback (values match the actual dataset)
+    if (!statsData) {
+      statsData = FALLBACK;
+      source    = "cached";
+    }
+
+    // Try /history endpoint
+    try {
+      const res = await axios.get(`${API_BASE}/history`, { timeout: 5000 });
+      if (Array.isArray(res.data)) histData = res.data;
+    } catch {}
+
+    // Fall back to localStorage prediction if no history from backend
+    if (!histData || histData.length === 0) {
+      histData = getLocalHistory();
+    }
+
+    setDsStats(statsData);
+    setHistory(histData);
+    setBackendOk(online);
+    setDataSource(source);
+    setLastUpdate(new Date());
+    setTimeout(() => setLoading(false), 350);
+  }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -201,15 +327,18 @@ export default function Dashboard() {
           </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <Badge variant={backendOk === false ? "warning" : "success"} icon={
-            <span style={{
-              width: 7, height: 7, borderRadius: "50%", display: "inline-block",
-              background: backendOk === false ? "#f59e0b" : "#22c55e",
-              boxShadow: backendOk ? "0 0 8px #22c55e" : "none",
-              animation: backendOk ? "pulse 2s infinite" : "none",
-            }} />
-          }>
-            {backendOk === false ? "OFFLINE" : "LIVE"}
+          <Badge
+            variant={dataSource === "live" ? "success" : dataSource === "csv" ? "success" : "default"}
+            icon={
+              <span style={{
+                width: 7, height: 7, borderRadius: "50%", display: "inline-block",
+                background: dataSource === "live" ? "#22c55e" : dataSource === "csv" ? "#22c55e" : "var(--text-dim)",
+                boxShadow: backendOk ? "0 0 8px #22c55e" : "none",
+                animation: backendOk ? "pulse 2s infinite" : "none",
+              }} />
+            }
+          >
+            {dataSource === "live" ? "LIVE" : dataSource === "csv" ? "CSV DATA" : "CACHED"}
           </Badge>
           <button
             className="btn-ghost"
@@ -222,15 +351,25 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Offline warning ── */}
-      {backendOk === false && (
+      {/* ── Data source notice (only shown when not fully live) ── */}
+      {dataSource !== "live" && (
         <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
           style={{
-            background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.35)",
-            borderLeft: "4px solid #f59e0b", borderRadius: "var(--r-md)",
-            padding: "12px 16px", marginBottom: 20, fontSize: 13, color: "var(--text-muted)",
+            background: dataSource === "csv"
+              ? "rgba(34,197,94,0.07)"
+              : "rgba(124,92,255,0.07)",
+            border: `1px solid ${dataSource === "csv" ? "rgba(34,197,94,0.3)" : "rgba(124,92,255,0.25)"}`,
+            borderLeft: `4px solid ${dataSource === "csv" ? "#22c55e" : "var(--accent-1)"}`,
+            borderRadius: "var(--r-md)",
+            padding: "11px 16px", marginBottom: 20,
+            fontSize: 13, color: "var(--text-muted)",
+            display: "flex", alignItems: "center", gap: 10,
           }}>
-          ⚠️ Showing cached dataset values — backend unreachable. Start the backend or check your Railway deployment.
+          <span style={{ fontSize: 16 }}>{dataSource === "csv" ? "✅" : "📊"}</span>
+          {dataSource === "csv"
+            ? "Dataset loaded from training CSV via Railway. New endpoints deploy automatically — refresh in a minute."
+            : "Showing pre-computed dataset values (2,000 student training data). Start the backend or use start-all.bat for live data."
+          }
         </motion.div>
       )}
 

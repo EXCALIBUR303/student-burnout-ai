@@ -1,0 +1,4 @@
+# Netlify SPA fallback — serves index.html for all routes
+# so React Router handles client-side navigation correctly.
+# API calls go directly to Railway (configured via REACT_APP_BACKEND env var).
+/*    /index.html   200
