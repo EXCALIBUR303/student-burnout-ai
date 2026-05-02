@@ -21,7 +21,7 @@ const isApiCall = (_pathname, req) => {
   return !accept.includes("text/html");
 };
 
-const API_ROUTES = ["/predict", "/plan", "/chat", "/data", "/stats", "/history"];
+const API_ROUTES = ["/predict", "/plan", "/chat", "/data", "/stats", "/history", "/register", "/login", "/me", "/insights"];
 
 module.exports = function (app) {
   API_ROUTES.forEach((route) => {
