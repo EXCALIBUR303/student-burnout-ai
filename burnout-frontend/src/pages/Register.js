@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useToast } from "../context/ToastContext";
 import "../App.css";
+import API_BASE from "../utils/api";
 
 const BRAND_FEATURES = [
   { icon: "🆓", text: "100% free, forever" },
@@ -44,22 +45,20 @@ function Register() {
     }
     setLoading(true);
     try {
-      const apiUrl = process.env.REACT_APP_BACKEND || "";
-      const res    = await fetch(`${apiUrl}/register`, {
+      const res = await fetch(`${API_BASE}/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
       });
       const data = await res.json();
-      if (res.ok) {
-        toast.success("Account created ✨", data.message || "Redirecting to login...");
-        setTimeout(() => navigate("/login"), 1100);
-      } else {
-        toast.error("Registration failed", data.message || "Please try again");
+      if (data.error) {
+        toast.error("Registration failed", data.error);
+        return;
       }
-    } catch {
-      toast.success("Demo account created", "Redirecting to login...");
+      toast.success("Account created ✨", "Redirecting to login...");
       setTimeout(() => navigate("/login"), 1100);
+    } catch {
+      toast.error("Connection error", "Could not reach the server");
     } finally {
       setLoading(false);
     }
