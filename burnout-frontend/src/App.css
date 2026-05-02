@@ -411,7 +411,7 @@ button:disabled {
   margin-bottom: 20px;
 }
 @media (max-width: 900px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 500px) { .stats-grid { grid-template-columns: 1fr; } }
+@media (max-width: 400px) { .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; } }
 
 .charts-grid {
   display: grid;
@@ -420,6 +420,28 @@ button:disabled {
   margin-bottom: 20px;
 }
 @media (max-width: 900px) { .charts-grid { grid-template-columns: 1fr; } }
+
+/* ── Mobile chart overflow fixes ── */
+@media (max-width: 600px) {
+  .chart-card {
+    overflow: hidden;
+  }
+  /* Recharts ResponsiveContainer can still overflow — clip it */
+  .chart-card .recharts-wrapper,
+  .chart-card svg {
+    max-width: 100% !important;
+    overflow: visible;
+  }
+  /* Donut/pie legend wrapping */
+  .recharts-legend-wrapper {
+    white-space: normal !important;
+    width: 100% !important;
+  }
+  /* Stat cards: keep 2-column on small phones */
+  .stat-card {
+    padding: 14px 12px;
+  }
+}
 
 /* ===== STAT CARD ===== */
 .stat-card {

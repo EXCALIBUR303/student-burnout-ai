@@ -548,15 +548,18 @@ export default function Dashboard() {
                 <ResponsiveContainer width="100%" height={260}>
                   <PieChart>
                     <Pie data={pieData} dataKey="value" nameKey="name"
-                      outerRadius={95} innerRadius={56} paddingAngle={3}
-                      label={({ name, percent }) => `${name} ${(percent*100).toFixed(0)}%`}
-                      labelLine={false}>
-                      {pieData.map((_, i) => (
+                      outerRadius={88} innerRadius={52} paddingAngle={3}
+                      label={false} labelLine={false}>
+                      {pieData.map((entry, i) => (
                         <Cell key={i} fill={PIE_COLORS[i]} stroke="var(--bg-elevated)" strokeWidth={3} />
                       ))}
                     </Pie>
-                    <Tooltip contentStyle={TT} />
-                    <Legend wrapperStyle={{ color: "var(--text-muted)", fontSize: 13 }} />
+                    <Tooltip contentStyle={TT}
+                      formatter={(value, name) => [`${value}%`, name]} />
+                    <Legend
+                      wrapperStyle={{ color: "var(--text-muted)", fontSize: 12, paddingTop: 8 }}
+                      formatter={(value, entry) => `${value} ${entry.payload.value}%`}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               </motion.div>
@@ -685,7 +688,7 @@ export default function Dashboard() {
             </div>
 
             {/* Gauge + key facts */}
-            <div className="charts-grid" style={{ gridTemplateColumns: "1fr 1fr", marginBottom: 20 }}>
+            <div className="charts-grid" style={{ marginBottom: 20 }}>
 
               {/* Gauge: high risk rate */}
               <div className="chart-card" style={{ textAlign: "center" }}>
