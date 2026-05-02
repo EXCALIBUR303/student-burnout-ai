@@ -258,113 +258,152 @@ function Flowchart() {
         <Badge variant={variant}>{result}</Badge>
       </div>
 
-      {/* ── Counsellor Banner (High Burnout — recommended) ── */}
+      {/* ── Counsellor Banner (High Burnout — high-impact) ── */}
       {result === "High Burnout" && (
         <motion.div
-          initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0, y: -12, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ type: "spring", stiffness: 260, damping: 22 }}
           style={{
             borderRadius: "var(--r-lg)",
-            background: "rgba(239,68,68,0.07)",
-            border: "1px solid rgba(239,68,68,0.3)",
-            borderLeft: "4px solid #ef4444",
-            padding: "18px 20px",
+            background: "linear-gradient(135deg, rgba(239,68,68,0.18) 0%, rgba(124,92,255,0.12) 100%)",
+            border: "1.5px solid rgba(239,68,68,0.55)",
+            boxShadow: "0 0 0 1px rgba(239,68,68,0.15), 0 8px 40px rgba(239,68,68,0.22)",
+            padding: "24px 24px 20px",
             marginBottom: 20,
+            position: "relative",
+            overflow: "hidden",
           }}
         >
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 16 }}>
-            <div style={{
-              width: 44, height: 44, borderRadius: "50%", flexShrink: 0,
-              background: "rgba(239,68,68,0.15)", border: "2px solid #ef4444",
-              display: "grid", placeItems: "center", fontSize: 22,
-            }}>🧑‍⚕️</div>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#ef4444", marginBottom: 4 }}>
-                ✦ Recommended for You
+          {/* Decorative glow blobs */}
+          <div style={{
+            position: "absolute", top: -40, right: -40,
+            width: 180, height: 180, borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(239,68,68,0.18) 0%, transparent 70%)",
+            pointerEvents: "none",
+          }} />
+          <div style={{
+            position: "absolute", bottom: -30, left: 60,
+            width: 120, height: 120, borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(124,92,255,0.12) 0%, transparent 70%)",
+            pointerEvents: "none",
+          }} />
+
+          {/* Header */}
+          <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18, position: "relative" }}>
+            <motion.div
+              animate={{ scale: [1, 1.08, 1] }}
+              transition={{ repeat: Infinity, duration: 2.4, ease: "easeInOut" }}
+              style={{
+                width: 52, height: 52, borderRadius: "50%", flexShrink: 0,
+                background: "linear-gradient(135deg, #ef4444, #f97316)",
+                boxShadow: "0 0 0 4px rgba(239,68,68,0.2), 0 4px 16px rgba(239,68,68,0.4)",
+                display: "grid", placeItems: "center", fontSize: 26,
+              }}
+            >🧑‍⚕️</motion.div>
+
+            <div style={{ flex: 1 }}>
+              <div style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                fontSize: 10, fontWeight: 800, textTransform: "uppercase",
+                letterSpacing: "0.12em", color: "#fff",
+                background: "linear-gradient(90deg,#ef4444,#f97316)",
+                padding: "3px 10px", borderRadius: 999, marginBottom: 6,
+              }}>
+                <span style={{
+                  width: 6, height: 6, borderRadius: "50%", background: "#fff",
+                  animation: "pulse 1.5s infinite",
+                }} />
+                Recommended for You
               </div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", marginBottom: 3 }}>
-                Speaking with a counsellor can help right now
+              <div style={{ fontSize: 20, fontWeight: 800, color: "#fff", lineHeight: 1.25, letterSpacing: "-0.01em" }}>
+                You don't have to handle this alone.
               </div>
-              <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.55 }}>
-                Based on your High burnout result, we recommend a free confidential session with one of Woxsen's wellness counsellors. No referral needed — book directly.
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", marginTop: 5, lineHeight: 1.6 }}>
+                Your result suggests it's worth talking to someone. Woxsen offers <strong style={{ color: "#fff" }}>free, confidential sessions</strong> — no referral, no waiting list.
               </div>
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12 }}>
-            {/* Dr. Poorva Shinde */}
-            <a
-              href="https://calendly.com/wellness-centre-ryu/counselling"
-              target="_blank" rel="noopener noreferrer"
-              style={{ textDecoration: "none" }}
-            >
-              <motion.div
-                whileHover={{ y: -2, boxShadow: "0 8px 24px rgba(239,68,68,0.2)" }}
-                style={{
-                  display: "flex", alignItems: "center", gap: 14,
-                  background: "var(--bg-elevated)", borderRadius: "var(--r-md)",
-                  border: "1px solid rgba(239,68,68,0.25)", padding: "14px 16px",
-                  cursor: "pointer",
-                }}
-              >
-                <div style={{
-                  width: 42, height: 42, borderRadius: "50%", flexShrink: 0,
-                  background: "linear-gradient(135deg,#ef4444,#f97316)",
-                  display: "grid", placeItems: "center", fontSize: 18, color: "#fff",
-                }}>👩‍⚕️</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 2 }}>Dr. Poorva Shinde</div>
-                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Director — Wellness</div>
-                </div>
-                <div style={{
-                  padding: "6px 12px", borderRadius: 999, fontSize: 11, fontWeight: 700,
-                  background: "rgba(239,68,68,0.12)", color: "#ef4444",
-                  border: "1px solid rgba(239,68,68,0.3)", flexShrink: 0,
-                }}>
-                  Book →
-                </div>
-              </motion.div>
-            </a>
+          {/* Counsellor cards */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12, marginBottom: 16, position: "relative" }}>
+            {[
+              {
+                name: "Dr. Poorva Shinde",
+                role: "Director — Wellness",
+                emoji: "👩‍⚕️",
+                grad: "linear-gradient(135deg,#ef4444,#f97316)",
+                url: "https://calendly.com/wellness-centre-ryu/counselling",
+              },
+              {
+                name: "Ms. Mohua Das",
+                role: "Wellness Program Officer",
+                emoji: "👩‍💼",
+                grad: "linear-gradient(135deg,#7c5cff,#ef4444)",
+                url: "https://calendly.com/mohua-das-woxsen/new-meeting",
+              },
+            ].map((c) => (
+              <a key={c.name} href={c.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
+                <motion.div
+                  whileHover={{ y: -4, boxShadow: "0 12px 32px rgba(239,68,68,0.35)" }}
+                  whileTap={{ scale: 0.97 }}
+                  transition={{ type: "spring", stiffness: 340, damping: 22 }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 14,
+                    background: "rgba(255,255,255,0.06)",
+                    backdropFilter: "blur(8px)",
+                    borderRadius: "var(--r-md)",
+                    border: "1px solid rgba(255,255,255,0.15)",
+                    padding: "16px 18px",
+                    cursor: "pointer",
+                  }}
+                >
+                  <div style={{
+                    width: 48, height: 48, borderRadius: "50%", flexShrink: 0,
+                    background: c.grad,
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                    display: "grid", placeItems: "center", fontSize: 22,
+                  }}>{c.emoji}</div>
 
-            {/* Ms. Mohua Das */}
-            <a
-              href="https://calendly.com/mohua-das-woxsen/new-meeting"
-              target="_blank" rel="noopener noreferrer"
-              style={{ textDecoration: "none" }}
-            >
-              <motion.div
-                whileHover={{ y: -2, boxShadow: "0 8px 24px rgba(239,68,68,0.2)" }}
-                style={{
-                  display: "flex", alignItems: "center", gap: 14,
-                  background: "var(--bg-elevated)", borderRadius: "var(--r-md)",
-                  border: "1px solid rgba(239,68,68,0.25)", padding: "14px 16px",
-                  cursor: "pointer",
-                }}
-              >
-                <div style={{
-                  width: 42, height: 42, borderRadius: "50%", flexShrink: 0,
-                  background: "linear-gradient(135deg,#7c5cff,#ef4444)",
-                  display: "grid", placeItems: "center", fontSize: 18, color: "#fff",
-                }}>👩‍💼</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 2 }}>Ms. Mohua Das</div>
-                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Wellness Program Officer</div>
-                </div>
-                <div style={{
-                  padding: "6px 12px", borderRadius: 999, fontSize: 11, fontWeight: 700,
-                  background: "rgba(239,68,68,0.12)", color: "#ef4444",
-                  border: "1px solid rgba(239,68,68,0.3)", flexShrink: 0,
-                }}>
-                  Book →
-                </div>
-              </motion.div>
-            </a>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", marginBottom: 2 }}>{c.name}</div>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)" }}>{c.role}</div>
+                  </div>
+
+                  <motion.div
+                    whileHover={{ scale: 1.06 }}
+                    style={{
+                      padding: "9px 18px", borderRadius: 999, fontSize: 12, fontWeight: 800,
+                      background: "linear-gradient(90deg,#ef4444,#f97316)",
+                      color: "#fff", flexShrink: 0,
+                      boxShadow: "0 4px 14px rgba(239,68,68,0.45)",
+                      letterSpacing: "0.02em",
+                    }}
+                  >
+                    Book Free →
+                  </motion.div>
+                </motion.div>
+              </a>
+            ))}
           </div>
 
-          <div style={{ marginTop: 12, fontSize: 11, color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 6 }}>
-            <span>📧</span>
-            <span>Queries: <strong style={{ color: "var(--text-muted)" }}>wellness.centre@woxsen.edu.in</strong></span>
-            <span style={{ marginLeft: 12 }}>📞</span>
-            <span><strong style={{ color: "var(--text-muted)" }}>9049980927</strong></span>
+          {/* Footer contact */}
+          <div style={{
+            display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center",
+            padding: "10px 14px", borderRadius: "var(--r-md)",
+            background: "rgba(0,0,0,0.2)", position: "relative",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "rgba(255,255,255,0.6)" }}>
+              <span>📧</span>
+              <span>wellness.centre@woxsen.edu.in</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "rgba(255,255,255,0.6)" }}>
+              <span>📞</span>
+              <span>9049980927</span>
+            </div>
+            <div style={{ marginLeft: "auto", fontSize: 11, color: "rgba(255,255,255,0.4)", fontStyle: "italic" }}>
+              Free · Confidential · No referral needed
+            </div>
           </div>
         </motion.div>
       )}
