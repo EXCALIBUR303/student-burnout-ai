@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../context/ToastContext";
 import Badge from "../components/Badge";
+import API_BASE from "../utils/api";
 
 const QUESTIONS = [
   { q: "How many hours do you study daily?",         type: "Academic",     icon: "📚", tip: "Too much studying without breaks can increase burnout." },
@@ -120,7 +121,7 @@ function Predict() {
     localStorage.setItem("burnoutFeatures", JSON.stringify(mapped));
 
     try {
-      const { data } = await axios.post("/predict", mapped);
+      const { data } = await axios.post(`${API_BASE}/predict`, mapped);
       const label = data.prediction === "High" ? "High Burnout"
                   : data.prediction === "Medium" ? "Medium Burnout"
                   : "Low Burnout";
@@ -167,12 +168,23 @@ function Predict() {
 
   /* ======================= RESULT VIEW ======================= */
   if (result) {
-    const variant = result === "High Burnout" ? "danger"
-                  : result === "Medium Burnout" ? "warning" : "success";
-    const resultIcon = variant === "danger" ? "🔥" : variant === "warning" ? "⚠️" : "🌱";
+    const variant     = result === "High Burnout" ? "danger" : result === "Medium Burnout" ? "warning" : "success";
+    const resultIcon  = variant === "danger" ? "🔥" : variant === "warning" ? "⚠️" : "🌱";
+    const riskColor   = variant === "danger" ? "var(--danger)" : variant === "warning" ? "var(--warning)" : "var(--success)";
+    const riskPct     = mlResult ? (mlResult.risk === 2 ? 82 : mlResult.risk === 1 ? 48 : 18) : 30;
     const savedFeatures = features || JSON.parse(localStorage.getItem("burnoutFeatures") || "{}");
     const savedAnswers  = answers.length ? answers : JSON.parse(localStorage.getItem("burnoutAnswers") || "[]");
     const insights = getPersonalisedInsights(savedAnswers, savedFeatures);
+
+    const handleShare = async () => {
+      const text = `I just checked my burnout risk with BurnoutAI 🔥\nResult: ${result}\nTake the free 2-min assessment: ${window.location.origin}`;
+      if (navigator.share) {
+        try { await navigator.share({ title: "My BurnoutAI Result", text }); } catch {}
+      } else {
+        await navigator.clipboard.writeText(text);
+        toast.success("Copied!", "Result copied to clipboard");
+      }
+    };
 
     return (
       <div className="dashboard-container">
@@ -182,82 +194,94 @@ function Predict() {
           transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
           style={{ maxWidth: 720, margin: "40px auto" }}
         >
-          {/* Result card */}
-          <div
-            className="chart-card"
-            style={{ textAlign: "center", padding: 40, borderLeft: `4px solid var(--${variant})` }}
-          >
-            <div style={{ fontSize: 56, marginBottom: 12 }}>{resultIcon}</div>
-            <Badge variant={variant} style={{ marginBottom: 16 }}>ML prediction</Badge>
-            <h1 style={{ fontSize: 40, marginBottom: 8 }}>{result}</h1>
-            <p style={{ marginBottom: 4, color: "var(--text-muted)" }}>
-              Based on your responses — here's what the model found.
+          {/* ── Result card ── */}
+          <div className="chart-card result-card" style={{ textAlign: "center", padding: "40px 32px", borderTop: `4px solid ${riskColor}` }}>
+            {/* Glowing icon */}
+            <motion.div
+              initial={{ scale: 0 }} animate={{ scale: 1 }}
+              transition={{ delay: 0.15, type: "spring", stiffness: 200 }}
+              style={{ fontSize: 60, marginBottom: 16, filter: `drop-shadow(0 0 20px ${riskColor}66)` }}>
+              {resultIcon}
+            </motion.div>
+
+            <Badge variant={variant} style={{ marginBottom: 14 }}>ML prediction</Badge>
+
+            <h1 style={{ fontSize: 38, marginBottom: 8, color: riskColor }}>{result}</h1>
+            <p style={{ marginBottom: 24, color: "var(--text-muted)" }}>
+              Based on your 10 responses — here's what the model detected.
             </p>
 
-            {/* Feature summary */}
+            {/* Risk meter */}
+            <div style={{ maxWidth: 360, margin: "0 auto 24px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--text-dim)", marginBottom: 8, fontWeight: 600 }}>
+                <span>Low risk</span><span>High risk</span>
+              </div>
+              <div style={{ height: 10, background: "var(--surface-strong)", borderRadius: 6, overflow: "hidden", position: "relative" }}>
+                <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, var(--success) 0%, var(--warning) 50%, var(--danger) 100%)", opacity: 0.3 }} />
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${riskPct}%` }}
+                  transition={{ delay: 0.3, duration: 1, ease: [0.16, 1, 0.3, 1] }}
+                  style={{ height: "100%", background: riskColor, borderRadius: 6, position: "relative" }}>
+                  <div style={{ position: "absolute", right: -1, top: -4, width: 18, height: 18, borderRadius: "50%", background: riskColor, border: "3px solid var(--bg-elevated)", boxShadow: `0 0 12px ${riskColor}` }} />
+                </motion.div>
+              </div>
+              <div style={{ textAlign: "center", marginTop: 10, fontSize: 13, color: "var(--text-muted)" }}>
+                Risk index: <span style={{ fontWeight: 700, color: riskColor }}>{riskPct}/100</span>
+              </div>
+            </div>
+
+            {/* Feature chips */}
             {savedFeatures.study_hours_per_day && (
-              <div
-                style={{
-                  display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap",
-                  margin: "20px 0", fontSize: 13,
-                }}
-              >
+              <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", fontSize: 13 }}>
                 {[
-                  { icon: "📚", label: "Study",    val: `${savedFeatures.study_hours_per_day}h/day` },
-                  { icon: "😴", label: "Sleep",    val: `${savedFeatures.sleep_hours_per_day}h/day` },
-                  { icon: "🏃", label: "Activity", val: `${savedFeatures.physical_activity_hours_per_day}h/day` },
-                  { icon: "👥", label: "Social",   val: `${savedFeatures.social_hours_per_day}h/day` },
+                  { icon: "📚", label: "Study",    val: `${savedFeatures.study_hours_per_day}h` },
+                  { icon: "😴", label: "Sleep",    val: `${savedFeatures.sleep_hours_per_day}h` },
+                  { icon: "🏃", label: "Activity", val: `${savedFeatures.physical_activity_hours_per_day}h` },
+                  { icon: "👥", label: "Social",   val: `${savedFeatures.social_hours_per_day}h` },
                 ].map((f) => (
-                  <div
-                    key={f.label}
-                    style={{
-                      padding: "8px 14px",
-                      background: "var(--surface)",
-                      border: "1px solid var(--border)",
-                      borderRadius: "var(--r-md)",
-                      display: "flex", gap: 6, alignItems: "center",
-                    }}
-                  >
+                  <motion.div key={f.label}
+                    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5, duration: 0.4 }}
+                    style={{ padding: "8px 14px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", display: "flex", gap: 6, alignItems: "center" }}>
                     <span>{f.icon}</span>
                     <span style={{ color: "var(--text-muted)" }}>{f.label}:</span>
-                    <span style={{ fontWeight: 700, color: "var(--text)" }}>{f.val}</span>
-                  </div>
+                    <span style={{ fontWeight: 700, color: "var(--text)" }}>{f.val}/day</span>
+                  </motion.div>
                 ))}
               </div>
             )}
           </div>
 
-          {/* Personalised insights */}
+          {/* ── Personalised insights ── */}
           <div className="chart-card" style={{ marginTop: 16 }}>
             <h3 style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
               <span>🤖</span> Personalised insights
             </h3>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
-              {insights.map((r) => (
-                <div
-                  key={r.title}
-                  style={{
-                    padding: 14,
-                    background: "var(--surface)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "var(--r-md)",
-                  }}
-                >
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 }}>
+              {insights.map((r, i) => (
+                <motion.div key={r.title}
+                  initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 * i + 0.4, duration: 0.35 }}
+                  style={{ padding: 14, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)" }}>
                   <div style={{ fontSize: 20, marginBottom: 6 }}>{r.icon}</div>
                   <div style={{ fontWeight: 600, fontSize: 13, color: "var(--text)", marginBottom: 4 }}>{r.title}</div>
-                  <div style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.5 }}>{r.desc}</div>
-                </div>
+                  <div style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.55 }}>{r.desc}</div>
+                </motion.div>
               ))}
             </div>
           </div>
 
-          {/* CTA buttons */}
+          {/* ── CTA buttons ── */}
           <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginTop: 16 }}>
             <button onClick={() => navigate("/flowchart")} style={{ width: "auto", padding: "13px 28px" }}>
               View recovery plan →
             </button>
-            <button className="btn-ghost" onClick={handleRestart} style={{ width: "auto", padding: "13px 24px" }}>
-              Retake test
+            <button className="btn-ghost" onClick={handleShare} style={{ width: "auto", padding: "13px 22px" }}>
+              📤 Share result
+            </button>
+            <button className="btn-ghost" onClick={handleRestart} style={{ width: "auto", padding: "13px 22px" }}>
+              ↺ Retake
             </button>
           </div>
         </motion.div>

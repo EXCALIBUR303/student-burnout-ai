@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import "../App.css";
 import axios from "axios";
+import API_BASE from "../utils/api";
 import CountUp from "react-countup";
 import GaugeChart from "react-gauge-chart";
 import { motion, AnimatePresence } from "framer-motion";
@@ -216,7 +217,7 @@ export default function Dashboard() {
 
     // 1. Try new /stats endpoint (new Railway or local backend)
     try {
-      const res = await axios.get("/stats", { timeout: 6000 });
+      const res = await axios.get(`${API_BASE}/stats`, { timeout: 6000 });
       if (res.data && !res.data.error && res.data.total) {
         statsData = res.data;
         online    = true;
@@ -227,7 +228,7 @@ export default function Dashboard() {
     // 2. Fall back to /data (old Railway — always had this endpoint)
     if (!statsData) {
       try {
-        const res = await axios.get("/data", { timeout: 8000 });
+        const res = await axios.get(`${API_BASE}/data`, { timeout: 8000 });
         if (Array.isArray(res.data) && res.data.length > 0) {
           statsData = computeStatsFromRows(res.data);
           online    = true;
@@ -244,7 +245,7 @@ export default function Dashboard() {
 
     // Try /history endpoint
     try {
-      const res = await axios.get("/history", { timeout: 5000 });
+      const res = await axios.get(`${API_BASE}/history`, { timeout: 5000 });
       if (Array.isArray(res.data)) histData = res.data;
     } catch {}
 

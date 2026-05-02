@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
+import API_BASE from "../utils/api";
 import "../App.css";
 import ReactFlow, { Background, Controls } from "reactflow";
 import "reactflow/dist/style.css";
@@ -171,7 +172,7 @@ function Flowchart() {
     }
     setStreak(currentStreak);
 
-    axios.post("/plan", { risk })
+    axios.post(`${API_BASE}/plan`, { risk })
       .then(({ data }) => {
         const steps = data.plan?.steps || [];
         const lv    = data.plan?.level || result;
