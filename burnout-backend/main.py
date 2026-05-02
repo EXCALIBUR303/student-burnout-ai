@@ -319,13 +319,21 @@ def get_dataset_stats():
 
 
 @app.get("/history")
-def get_prediction_history():
-    """Returns all user predictions stored in SQLite, newest first."""
+def get_prediction_history(request: Request):
+    """Returns predictions: personal if token present, all rows otherwise."""
     try:
-        cursor.execute(
-            "SELECT id, study, sleep, social, physical, result, created_at "
-            "FROM predictions ORDER BY created_at DESC LIMIT 200"
-        )
+        user = get_user_from_request(request)
+        if user:
+            cursor.execute(
+                "SELECT id, study, sleep, social, physical, result, created_at "
+                "FROM predictions WHERE user_id = ? ORDER BY created_at DESC LIMIT 200",
+                (user["sub"],),
+            )
+        else:
+            cursor.execute(
+                "SELECT id, study, sleep, social, physical, result, created_at "
+                "FROM predictions ORDER BY created_at DESC LIMIT 200"
+            )
         rows = cursor.fetchall()
         return [
             {
@@ -344,7 +352,7 @@ def get_prediction_history():
 
 
 @app.post("/predict")
-def predict(data: dict):
+def predict(data: dict, request: Request):
     try:
         study    = float(data.get("study_hours_per_day", 0))
         sleep    = float(data.get("sleep_hours_per_day", 0))
@@ -367,9 +375,11 @@ def predict(data: dict):
         prediction   = model.predict(df)[0]
         result_label = labels.get(int(prediction), "Unknown")
 
+        user = get_user_from_request(request)
+        user_id = user["sub"] if user else None
         cursor.execute(
-            "INSERT INTO predictions (study, sleep, social, physical, result) VALUES (?,?,?,?,?)",
-            (study, sleep, social, physical, result_label),
+            "INSERT INTO predictions (study, sleep, social, physical, result, user_id) VALUES (?,?,?,?,?,?)",
+            (study, sleep, social, physical, result_label, user_id),
         )
         conn.commit()
 
