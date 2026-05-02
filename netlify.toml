@@ -1,0 +1,31 @@
+# ================================================================
+# netlify.toml — Burnout AI Frontend Deployment
+#
+# Deploy steps:
+#   1. Push this repo to GitHub (already done).
+#   2. Go to https://app.netlify.com → "Add new site" → "Import from Git".
+#   3. Select your repo.  Netlify auto-detects this file.
+#   4. Under Site settings → Environment variables, add:
+#        REACT_APP_BACKEND = https://web-production-43ab4.up.railway.app
+#   5. Click "Deploy site" — done!  Anyone on mobile/desktop worldwide
+#      can use your app at https://<your-site>.netlify.app
+#
+# ================================================================
+
+[build]
+  base    = "burnout-frontend"
+  command = "npm run build"
+  publish = "build"
+
+[build.environment]
+  # Tells the React app which backend to call in production.
+  # You can override this in Netlify's UI (Site settings → Env vars).
+  REACT_APP_BACKEND = "https://web-production-43ab4.up.railway.app"
+
+# ── SPA routing ────────────────────────────────────────────────────────────────
+# All page-navigation GET requests return index.html so React Router works.
+# API calls go directly to Railway (set via REACT_APP_BACKEND above).
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
