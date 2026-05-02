@@ -176,6 +176,39 @@ def compute_trend(user_id: int) -> dict | None:
         "count":     n,
     }
 
+
+def compute_streak(user_id: int) -> int:
+    """Return the current consecutive-day prediction streak for the user.
+    A streak ending on either today or yesterday is considered active
+    (grace period so morning users aren't penalised)."""
+    cursor.execute(
+        "SELECT DATE(created_at) AS day FROM predictions "
+        "WHERE user_id = ? GROUP BY DATE(created_at) ORDER BY day DESC",
+        (user_id,),
+    )
+    rows = cursor.fetchall()
+    if not rows:
+        return 0
+    today = datetime.now(timezone.utc).date()
+    try:
+        latest_day = datetime.strptime(rows[0][0], "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return 0
+    # Streak is broken if latest activity is older than yesterday
+    if latest_day < today - timedelta(days=1):
+        return 0
+    streak = 0
+    for i, row in enumerate(rows):
+        try:
+            day = datetime.strptime(row[0], "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            break
+        if day == latest_day - timedelta(days=i):
+            streak += 1
+        else:
+            break
+    return streak
+
 # ── Auth helpers ──────────────────────────────────────────────────────────────
 
 def hash_password(plain: str) -> str:
@@ -277,10 +310,15 @@ def me(request: Request):
 
 @app.get("/insights")
 def insights(request: Request):
-    result: dict = {"feature_importance": get_cached_feature_importance(), "trend": None}
+    result: dict = {
+        "feature_importance": get_cached_feature_importance(),
+        "trend":   None,
+        "streak":  0,
+    }
     user = get_user_from_request(request)
     if user:
-        result["trend"] = compute_trend(user["sub"])
+        result["trend"]  = compute_trend(user["sub"])
+        result["streak"] = compute_streak(user["sub"])
     return result
 
 

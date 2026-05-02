@@ -193,6 +193,81 @@ function getLocalHistory() {
   }];
 }
 
+// ─── Heatmap Calendar ────────────────────────────────────────────────────────
+
+function HeatmapCalendar({ history }) {
+  const riskScore = { Low: 1, Medium: 2, Moderate: 2, High: 3 };
+
+  // Build date → highest risk score map
+  const dayMap = {};
+  history.forEach((p) => {
+    const d = p.created_at ? p.created_at.slice(0, 10) : null;
+    if (!d) return;
+    const score = riskScore[p.result] || 0;
+    if (!dayMap[d] || score > dayMap[d]) dayMap[d] = score;
+  });
+
+  // 84 cells: last 84 days ending today, grouped into 12 columns of 7
+  const today = new Date();
+  const cells = [];
+  for (let i = 83; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    cells.push({ key, score: dayMap[key] || 0 });
+  }
+
+  const weeks = [];
+  for (let w = 0; w < 12; w++) weeks.push(cells.slice(w * 7, w * 7 + 7));
+
+  const COLOR  = { 0: "var(--border)", 1: "#22c55e", 2: "#f59e0b", 3: "#ef4444" };
+  const LEGEND = { 0: "No activity", 1: "Low risk", 2: "Medium risk", 3: "High risk" };
+
+  return (
+    <div className="chart-card" style={{ marginBottom: 20 }}>
+      <h3 className="chart-title">🗓️ Activity Heatmap</h3>
+      <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 14 }}>
+        Assessment activity over the last 12 weeks · colour = risk level
+      </p>
+
+      <div style={{ display: "flex", gap: 4, overflowX: "auto", paddingBottom: 4 }}>
+        {weeks.map((week, wi) => (
+          <div key={wi} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {week.map((cell) => (
+              <div
+                key={cell.key}
+                title={`${cell.key}: ${LEGEND[cell.score]}`}
+                style={{
+                  width: 14, height: 14, borderRadius: 3,
+                  background: COLOR[cell.score],
+                  flexShrink: 0,
+                  transition: "transform 0.1s",
+                  cursor: "default",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.4)")}
+                onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+
+      {/* Legend */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10, fontSize: 11, color: "var(--text-dim)" }}>
+        <span>Less</span>
+        {[0, 1, 2, 3].map((s) => (
+          <div
+            key={s}
+            title={LEGEND[s]}
+            style={{ width: 12, height: 12, borderRadius: 2, background: COLOR[s], border: "1px solid rgba(255,255,255,0.08)" }}
+          />
+        ))}
+        <span>High risk</span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export default function Dashboard() {
@@ -283,6 +358,7 @@ export default function Dashboard() {
   const histMed  = history.filter(p => p.result === "Medium" || p.result === "Moderate").length;
   const histLow  = history.filter(p => p.result === "Low").length;
   const lastPred = history[0] || null;
+  const streak = insights?.streak ?? 0;
 
   // Risk Over Time — map history results to numeric for line chart
   const RISK_NUM = { Low: 0, Medium: 1, Moderate: 1, High: 2 };
@@ -307,6 +383,20 @@ export default function Dashboard() {
 
   // You vs Dataset percentage comparison
   const s = dsStats || FALLBACK;
+
+  // ── Derived: personal habits averages ──
+  const yourAvgStudy    = history.length ? +(history.reduce((acc, p) => acc + (p.study    || 0), 0) / history.length).toFixed(1) : 0;
+  const yourAvgSleep    = history.length ? +(history.reduce((acc, p) => acc + (p.sleep    || 0), 0) / history.length).toFixed(1) : 0;
+  const yourAvgSocial   = history.length ? +(history.reduce((acc, p) => acc + (p.social   || 0), 0) / history.length).toFixed(1) : 0;
+  const yourAvgPhysical = history.length ? +(history.reduce((acc, p) => acc + (p.physical || 0), 0) / history.length).toFixed(1) : 0;
+
+  const habitsCompare = [
+    { label: "Study",    yours: yourAvgStudy,    dataset: s.avg_study    || 6.5  },
+    { label: "Sleep",    yours: yourAvgSleep,    dataset: s.avg_sleep    || 7.5  },
+    { label: "Social",   yours: yourAvgSocial,   dataset: s.avg_social   || 2.0  },
+    { label: "Activity", yours: yourAvgPhysical, dataset: s.avg_physical || 1.2  },
+  ];
+
   const compareData = [
     { label: "Low",    dataset: s.low_pct,      yours: history.length ? Math.round((histLow  / history.length) * 100) : 0 },
     { label: "Medium", dataset: s.moderate_pct, yours: history.length ? Math.round((histMed  / history.length) * 100) : 0 },
@@ -692,12 +782,16 @@ export default function Dashboard() {
             ) : (
               <>
                 {/* History stats */}
-                <div className="stats-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 20 }}>
+                <div className="stats-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(148px, 1fr))", marginBottom: 20 }}>
                   <MiniStatCard label="Total Assessments" icon="🔮" value={history.length} color="var(--accent-1)" delay={0}    />
                   <MiniStatCard label="High Risk"          icon="🔥" value={histHigh}        color="#ef4444"         delay={0.07} />
                   <MiniStatCard label="Medium Risk"        icon="⚡" value={histMed}         color="#f59e0b"         delay={0.14} />
                   <MiniStatCard label="Low Risk"           icon="✅" value={histLow}         color="#22c55e"         delay={0.21} />
+                  <MiniStatCard label="Day Streak"         icon="🔥" value={streak}          color="#f97316"         delay={0.28} />
                 </div>
+
+                {/* Activity heatmap */}
+                <HeatmapCalendar history={history} />
 
                 {/* Risk Over Time */}
                 {riskTimeline.length >= 2 && (
@@ -805,6 +899,25 @@ export default function Dashboard() {
                         <Legend wrapperStyle={{ color: "var(--text-muted)", fontSize: 12 }} />
                         <Bar dataKey="dataset" name="Dataset %" fill="#7c5cff" radius={[6,6,0,0]} />
                         <Bar dataKey="yours"   name="Your %"    fill="#00d4ff" radius={[6,6,0,0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </motion.div>
+
+                  {/* Grouped bar: your daily habits vs dataset averages */}
+                  <motion.div className="chart-card" whileHover={{ scale: 1.005 }}>
+                    <h3>🧬 Your Habits vs Dataset</h3>
+                    <p style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>
+                      Your average daily hours vs the dataset population (h/day)
+                    </p>
+                    <ResponsiveContainer width="100%" height={240}>
+                      <BarChart data={habitsCompare}>
+                        <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
+                        <XAxis dataKey="label" stroke={AXIS} fontSize={12} />
+                        <YAxis stroke={AXIS} fontSize={12} unit="h" domain={[0, "auto"]} />
+                        <Tooltip contentStyle={TT} formatter={(v, name) => [`${v}h`, name]} />
+                        <Legend wrapperStyle={{ color: "var(--text-muted)", fontSize: 12 }} />
+                        <Bar dataKey="yours"   name="Your avg"    fill="#00d4ff" radius={[6,6,0,0]} />
+                        <Bar dataKey="dataset" name="Dataset avg" fill="#7c5cff" radius={[6,6,0,0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </motion.div>
