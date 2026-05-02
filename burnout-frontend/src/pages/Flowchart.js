@@ -254,6 +254,117 @@ function Flowchart() {
         <Badge variant={variant}>{result}</Badge>
       </div>
 
+      {/* ── Counsellor Banner (High Burnout only) ── */}
+      {result === "High Burnout" && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+          style={{
+            borderRadius: "var(--r-lg)",
+            background: "rgba(239,68,68,0.07)",
+            border: "1px solid rgba(239,68,68,0.3)",
+            borderLeft: "4px solid #ef4444",
+            padding: "18px 20px",
+            marginBottom: 20,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 16 }}>
+            <div style={{
+              width: 44, height: 44, borderRadius: "50%", flexShrink: 0,
+              background: "rgba(239,68,68,0.15)", border: "2px solid #ef4444",
+              display: "grid", placeItems: "center", fontSize: 22,
+            }}>🧑‍⚕️</div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#ef4444", marginBottom: 4 }}>
+                Professional Support Available
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", marginBottom: 3 }}>
+                High burnout detected — talk to a Woxsen wellness counsellor
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.55 }}>
+                Free confidential sessions for Woxsen students. Book directly via Calendly — no referral needed.
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12 }}>
+            {/* Dr. Poorva Shinde */}
+            <a
+              href="https://calendly.com/wellness-centre-ryu/counselling"
+              target="_blank" rel="noopener noreferrer"
+              style={{ textDecoration: "none" }}
+            >
+              <motion.div
+                whileHover={{ y: -2, boxShadow: "0 8px 24px rgba(239,68,68,0.2)" }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 14,
+                  background: "var(--bg-elevated)", borderRadius: "var(--r-md)",
+                  border: "1px solid rgba(239,68,68,0.25)", padding: "14px 16px",
+                  cursor: "pointer",
+                }}
+              >
+                <div style={{
+                  width: 42, height: 42, borderRadius: "50%", flexShrink: 0,
+                  background: "linear-gradient(135deg,#ef4444,#f97316)",
+                  display: "grid", placeItems: "center", fontSize: 18, color: "#fff",
+                }}>👩‍⚕️</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 2 }}>Dr. Poorva Shinde</div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Director — Wellness</div>
+                </div>
+                <div style={{
+                  padding: "6px 12px", borderRadius: 999, fontSize: 11, fontWeight: 700,
+                  background: "rgba(239,68,68,0.12)", color: "#ef4444",
+                  border: "1px solid rgba(239,68,68,0.3)", flexShrink: 0,
+                }}>
+                  Book →
+                </div>
+              </motion.div>
+            </a>
+
+            {/* Ms. Mohua Das */}
+            <a
+              href="https://calendly.com/mohua-das-woxsen/new-meeting"
+              target="_blank" rel="noopener noreferrer"
+              style={{ textDecoration: "none" }}
+            >
+              <motion.div
+                whileHover={{ y: -2, boxShadow: "0 8px 24px rgba(239,68,68,0.2)" }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 14,
+                  background: "var(--bg-elevated)", borderRadius: "var(--r-md)",
+                  border: "1px solid rgba(239,68,68,0.25)", padding: "14px 16px",
+                  cursor: "pointer",
+                }}
+              >
+                <div style={{
+                  width: 42, height: 42, borderRadius: "50%", flexShrink: 0,
+                  background: "linear-gradient(135deg,#7c5cff,#ef4444)",
+                  display: "grid", placeItems: "center", fontSize: 18, color: "#fff",
+                }}>👩‍💼</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 2 }}>Ms. Mohua Das</div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Wellness Program Officer</div>
+                </div>
+                <div style={{
+                  padding: "6px 12px", borderRadius: 999, fontSize: 11, fontWeight: 700,
+                  background: "rgba(239,68,68,0.12)", color: "#ef4444",
+                  border: "1px solid rgba(239,68,68,0.3)", flexShrink: 0,
+                }}>
+                  Book →
+                </div>
+              </motion.div>
+            </a>
+          </div>
+
+          <div style={{ marginTop: 12, fontSize: 11, color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 6 }}>
+            <span>📧</span>
+            <span>Queries: <strong style={{ color: "var(--text-muted)" }}>wellness.centre@woxsen.edu.in</strong></span>
+            <span style={{ marginLeft: 12 }}>📞</span>
+            <span><strong style={{ color: "var(--text-muted)" }}>9049980927</strong></span>
+          </div>
+        </motion.div>
+      )}
+
       {/* ── Today's Focus card ── */}
       {!loadingPlan && (
         <motion.div
@@ -266,45 +377,55 @@ function Flowchart() {
             borderLeft: `4px solid ${progress >= 100 ? "#22c55e" : accentColor}`,
             padding: "18px 20px",
             marginBottom: 20,
-            display: "flex",
-            alignItems: "center",
-            gap: 16,
           }}
         >
-          <div style={{
-            width: 48, height: 48, borderRadius: "50%", flexShrink: 0,
-            background: progress >= 100 ? "rgba(34,197,94,0.2)" : "rgba(124,92,255,0.15)",
-            border: `2px solid ${progress >= 100 ? "#22c55e" : "var(--accent-1)"}`,
-            display: "grid", placeItems: "center", fontSize: 22,
-          }}>
-            {progress >= 100 ? "🏆" : "🎯"}
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-dim)", marginBottom: 4 }}>
-              Today's Focus
+          {/* Top row: icon + label + step counter */}
+          <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: progress < 100 && nextStep ? 14 : 0 }}>
+            <div style={{
+              width: 44, height: 44, borderRadius: "50%", flexShrink: 0,
+              background: progress >= 100 ? "rgba(34,197,94,0.2)" : "rgba(124,92,255,0.15)",
+              border: `2px solid ${progress >= 100 ? "#22c55e" : "var(--accent-1)"}`,
+              display: "grid", placeItems: "center", fontSize: 22,
+            }}>
+              {progress >= 100 ? "🏆" : "🎯"}
             </div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text)", marginBottom: 2 }}>
-              {progress >= 100 ? "All steps complete — excellent work!" : (nextStep || "All steps done!")}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-dim)", marginBottom: 4 }}>
+                Today's Focus
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", lineHeight: 1.4 }}>
+                {progress >= 100 ? "All steps complete — excellent work! 🎉" : (nextStep || "All steps done!")}
+              </div>
             </div>
             {progress < 100 && nextStep && (
-              <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                Step {nextStepIndex + 1} of {planSteps.length} · +{XP_PER_STEP} XP on completion
+              <div style={{
+                fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 999, flexShrink: 0,
+                background: `${accentColor}15`, color: accentColor, border: `1px solid ${accentColor}40`,
+              }}>
+                {nextStepIndex + 1} / {planSteps.length}
               </div>
             )}
           </div>
+
+          {/* Bottom row: XP info + Mark done button */}
           {progress < 100 && nextStep && nextNodeId && (
-            <motion.button
-              whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
-              onClick={() => markStep(nextNodeId, nextStep)}
-              style={{
-                padding: "10px 18px", borderRadius: "var(--r-md)", border: "none",
-                background: "var(--grad-primary)", color: "#fff",
-                fontSize: 13, fontWeight: 700, cursor: "pointer",
-                boxShadow: "0 6px 18px rgba(124,92,255,0.35)", flexShrink: 0,
-              }}
-            >
-              Mark done ✓
-            </motion.button>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingLeft: 58 }}>
+              <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                +{XP_PER_STEP} XP on completion
+              </div>
+              <motion.button
+                whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
+                onClick={() => markStep(nextNodeId, nextStep)}
+                style={{
+                  padding: "9px 20px", borderRadius: "var(--r-md)", border: "none",
+                  background: "var(--grad-primary)", color: "#fff",
+                  fontSize: 13, fontWeight: 700, cursor: "pointer",
+                  boxShadow: "0 4px 14px rgba(124,92,255,0.35)",
+                }}
+              >
+                Mark done ✓
+              </motion.button>
+            </div>
           )}
         </motion.div>
       )}
