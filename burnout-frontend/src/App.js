@@ -25,6 +25,7 @@ import { ThemeProvider } from "./context/ThemeContext";
 import { ToastProvider } from "./context/ToastContext";
 
 import "./App.css";
+import API_BASE from "./utils/api";
 
 // Reusable fade+slide wrapper
 const Page = ({ children, variant = "fade" }) => {
@@ -99,7 +100,24 @@ function App() {
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (token) setIsLoggedIn(true);
+    if (!token) return;
+    // Validate token is still good server-side
+    fetch(`${API_BASE}/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => {
+        if (r.ok) {
+          setIsLoggedIn(true);
+        } else {
+          localStorage.removeItem("token");
+          localStorage.removeItem("userEmail");
+          setIsLoggedIn(false);
+        }
+      })
+      .catch(() => {
+        // Network offline — trust the token for now
+        setIsLoggedIn(true);
+      });
   }, []);
 
   return (
