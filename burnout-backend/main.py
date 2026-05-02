@@ -8,6 +8,29 @@ import jwt
 import os
 from datetime import datetime, timedelta, timezone
 
+# ── Gemini AI setup (optional — falls back to offline if key not set) ──────────
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+_gemini_model = None
+if GEMINI_API_KEY:
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=GEMINI_API_KEY)
+        _gemini_model = genai.GenerativeModel(
+            model_name="gemini-1.5-flash",
+            system_instruction=(
+                "You are a compassionate AI wellness assistant for Burnout/AI, a student mental-health app at Woxsen University. "
+                "Your role: provide empathetic, evidence-based advice about stress, burnout, sleep, study habits, anxiety, and academic pressure. "
+                "Keep replies concise (2-4 sentences max), warm, and actionable. "
+                "If someone sounds in crisis, gently direct them to the free Woxsen counselling service (wellness.centre@woxsen.edu.in / 9049980927). "
+                "Never diagnose. Always remind users you're an AI, not a replacement for professional help. "
+                "Use encouraging, non-clinical language. Speak like a supportive senior student who happens to know a lot about wellbeing."
+            ),
+        )
+        print("✅ Gemini AI chatbot enabled")
+    except Exception as e:
+        print(f"⚠️  Gemini init failed: {e} — falling back to offline chat")
+        _gemini_model = None
+
 JWT_SECRET = os.environ.get("JWT_SECRET", "dev-secret-change-in-prod")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRY_DAYS = 7
@@ -579,5 +602,17 @@ def generate_plan(data: dict):
 
 @app.post("/chat")
 def chat(data: dict):
-    message = data.get("message", "")
+    message = data.get("message", "").strip()
+    if not message:
+        return {"reply": "I'm here — what's on your mind?"}
+
+    # Use Gemini if available, otherwise fall back to keyword responses
+    if _gemini_model:
+        try:
+            response = _gemini_model.generate_content(message)
+            reply = response.text.strip()
+            return {"reply": reply}
+        except Exception as e:
+            print(f"Gemini error: {e} — falling back to offline chat")
+
     return {"reply": offline_chat(message)}
