@@ -95,6 +95,7 @@ function Predict() {
   const [mlResult, setMlResult] = useState(null);
   const [features, setFeatures] = useState(null);
   const [loading, setLoading]   = useState(false);
+  const [mlInsights, setMlInsights] = useState(null);
 
   const liveScore  = useMemo(() => calculateLocalScore([...answers, value]), [answers, value]);
   const liveStatus = liveScore >= 12
@@ -128,8 +129,20 @@ function Predict() {
                   : data.prediction === "Medium" ? "Medium Burnout"
                   : "Low Burnout";
 
-      setMlResult({ label: data.prediction, risk: data.risk });
+      setMlResult({
+        label:       data.prediction,
+        risk:        data.risk,
+        confidence:  data.confidence  ?? null,
+        top_drivers: data.top_drivers ?? [],
+      });
       setResult(label);
+      // Fetch trend + feature importance
+      try {
+        const token2   = localStorage.getItem("token");
+        const headers2 = token2 ? { Authorization: `Bearer ${token2}` } : {};
+        const ins = await axios.get(`${API_BASE}/insights`, { headers: headers2 });
+        setMlInsights(ins.data);
+      } catch {}
       localStorage.setItem("burnoutResult", label);
       localStorage.setItem("burnoutRisk", String(data.risk));
       toast.success("Assessment complete", `ML result: ${data.prediction} stress`);
@@ -206,7 +219,21 @@ function Predict() {
               {resultIcon}
             </motion.div>
 
-            <Badge variant={variant} style={{ marginBottom: 14 }}>ML prediction</Badge>
+            <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginBottom: 14 }}>
+              <Badge variant={variant}>ML prediction</Badge>
+              {mlResult?.confidence && (
+                <Badge variant="default" style={{ background: "var(--surface-strong)", color: "var(--text)" }}>
+                  {mlResult.confidence}% confident
+                </Badge>
+              )}
+              {mlInsights?.trend && (
+                <Badge
+                  variant={mlInsights.trend.direction === "improving" ? "success" : mlInsights.trend.direction === "worsening" ? "danger" : "default"}
+                  style={mlInsights.trend.direction === "stable" ? { background: "var(--surface-strong)", color: "var(--text-muted)" } : {}}>
+                  {mlInsights.trend.direction === "improving" ? "📈 Improving" : mlInsights.trend.direction === "worsening" ? "📉 Worsening" : "➡️ Stable"}
+                </Badge>
+              )}
+            </div>
 
             <h1 style={{ fontSize: 38, marginBottom: 8, color: riskColor }}>{result}</h1>
             <p style={{ marginBottom: 24, color: "var(--text-muted)" }}>
@@ -232,6 +259,44 @@ function Predict() {
                 Risk index: <span style={{ fontWeight: 700, color: riskColor }}>{riskPct}/100</span>
               </div>
             </div>
+
+            {/* Top drivers */}
+            {mlResult?.top_drivers?.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5, duration: 0.4 }}
+                style={{ marginTop: 24 }}>
+                <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-dim)", marginBottom: 10 }}>
+                  Top risk drivers
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {mlResult.top_drivers.map((d) => (
+                    <div key={d.feature} style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "10px 14px",
+                      background: d.direction === "risk"
+                        ? "color-mix(in srgb, var(--danger) 8%, transparent)"
+                        : "color-mix(in srgb, var(--success) 8%, transparent)",
+                      border: `1px solid ${d.direction === "risk"
+                        ? "color-mix(in srgb, var(--danger) 25%, transparent)"
+                        : "color-mix(in srgb, var(--success) 25%, transparent)"}`,
+                      borderRadius: "var(--r-md)",
+                    }}>
+                      <span style={{ fontSize: 20 }}>{d.emoji}</span>
+                      <div style={{ flex: 1, textAlign: "left" }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{d.label}</div>
+                        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                          Your value: <strong>{d.value}</strong> · Avg: {d.avg}
+                        </div>
+                      </div>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: d.direction === "risk" ? "var(--danger)" : "var(--success)" }}>
+                        {d.direction === "risk" ? "⚠ Risk" : "✓ OK"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
 
             {/* Feature chips */}
             {savedFeatures.study_hours_per_day && (
