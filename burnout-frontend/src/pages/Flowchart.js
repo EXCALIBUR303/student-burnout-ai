@@ -7,6 +7,7 @@ import "reactflow/dist/style.css";
 import { motion, AnimatePresence } from "framer-motion";
 import Badge from "../components/Badge";
 import { useToast } from "../context/ToastContext";
+import QuoteCard from "../components/QuoteCard";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -91,6 +92,107 @@ const renderBold = (text) => {
   const parts = text.split(/\*\*(.*?)\*\*/g);
   return parts.map((part, i) => i % 2 === 1 ? <strong key={i}>{part}</strong> : part);
 };
+
+// ─── Goal Widget ─────────────────────────────────────────────────────────────
+
+function GoalWidget({ result, progress }) {
+  const [goal, setGoal] = useState(() => localStorage.getItem("burnoutGoal") || "");
+  const [targetDate, setTargetDate] = useState(() => localStorage.getItem("burnoutGoalDate") || "");
+  const [editing, setEditing] = useState(!localStorage.getItem("burnoutGoal"));
+
+  const save = () => {
+    localStorage.setItem("burnoutGoal", goal);
+    localStorage.setItem("burnoutGoalDate", targetDate);
+    setEditing(false);
+  };
+
+  const daysLeft = targetDate
+    ? Math.max(0, Math.ceil((new Date(targetDate) - new Date()) / 86400000))
+    : null;
+
+  return (
+    <div className="chart-card" style={{ marginBottom: 20 }}>
+      <div className="row-between" style={{ marginBottom: editing ? 14 : 10 }}>
+        <div>
+          <h3 style={{ margin: "0 0 3px" }}>🎯 My Wellness Goal</h3>
+          <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
+            Set a target — staying intentional helps recovery.
+          </p>
+        </div>
+        <button onClick={() => setEditing(e => !e)} style={{
+          background: "none", border: "1px solid var(--border-strong)",
+          borderRadius: 999, padding: "4px 12px", fontSize: 11,
+          fontWeight: 700, color: "var(--text-muted)", cursor: "pointer",
+        }}>
+          {editing ? "Cancel" : "Edit"}
+        </button>
+      </div>
+
+      {editing ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <input
+            value={goal}
+            onChange={e => setGoal(e.target.value)}
+            placeholder="e.g. Reach Low risk by end of month"
+            style={{
+              width: "100%", padding: "10px 14px", borderRadius: "var(--r-md)",
+              border: "1px solid var(--border-strong)", background: "var(--surface)",
+              color: "var(--text)", fontSize: 13, boxSizing: "border-box",
+            }}
+          />
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <input
+              type="date"
+              value={targetDate}
+              onChange={e => setTargetDate(e.target.value)}
+              style={{
+                flex: 1, padding: "10px 14px", borderRadius: "var(--r-md)",
+                border: "1px solid var(--border-strong)", background: "var(--surface)",
+                color: "var(--text)", fontSize: 13,
+              }}
+            />
+            <motion.button
+              whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
+              onClick={save}
+              style={{
+                padding: "10px 22px", borderRadius: "var(--r-md)", border: "none",
+                background: "var(--grad-primary)", color: "#fff",
+                fontSize: 13, fontWeight: 700, cursor: "pointer",
+              }}
+            >Save</motion.button>
+          </div>
+        </div>
+      ) : goal ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", marginBottom: 4 }}>
+              {goal}
+            </div>
+            {daysLeft !== null && (
+              <div style={{ fontSize: 12, color: daysLeft < 7 ? "#ef4444" : "var(--text-muted)" }}>
+                {daysLeft === 0 ? "🎯 Today is the day!" : `⏳ ${daysLeft} days remaining`}
+              </div>
+            )}
+          </div>
+          <div style={{
+            textAlign: "center", padding: "8px 16px", borderRadius: "var(--r-md)",
+            background: progress >= 100 ? "rgba(34,197,94,0.12)" : "rgba(124,92,255,0.1)",
+            border: `1px solid ${progress >= 100 ? "rgba(34,197,94,0.3)" : "rgba(124,92,255,0.2)"}`,
+          }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: progress >= 100 ? "#22c55e" : "var(--accent-1)" }}>
+              {progress}%
+            </div>
+            <div style={{ fontSize: 10, color: "var(--text-dim)", fontWeight: 600 }}>DONE</div>
+          </div>
+        </div>
+      ) : (
+        <div style={{ textAlign: "center", padding: "16px 0", color: "var(--text-dim)", fontSize: 13 }}>
+          No goal set yet — click Edit to add one.
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -491,6 +593,9 @@ function Flowchart() {
         ))}
       </div>
 
+      {/* ── Goal Setting ── */}
+      <GoalWidget result={result} progress={progress} />
+
       {/* ── XP bar ── */}
       <div className="chart-card" style={{ marginBottom: 20 }}>
         <div className="row-between" style={{ marginBottom: 10 }}>
@@ -527,6 +632,12 @@ function Flowchart() {
           <p style={{ fontSize: 13.5, color: "var(--text)", lineHeight: 1.65, margin: 0 }}>{dailyTip.tip}</p>
         </div>
       </motion.div>
+
+      {/* ── Motivational Quote ── */}
+      <QuoteCard
+        level={result === "High Burnout" ? "High" : result === "Medium Burnout" ? "Medium" : "Low"}
+        style={{ marginBottom: 20 }}
+      />
 
       {/* ── Recovery Steps with expandable tips ── */}
       {planSteps.length > 0 && (

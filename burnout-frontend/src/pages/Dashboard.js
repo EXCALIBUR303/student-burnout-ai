@@ -15,6 +15,8 @@ import {
 import Badge from "../components/Badge";
 import { StatSkeleton, ChartSkeleton } from "../components/Skeleton";
 import { useToast } from "../context/ToastContext";
+import QuoteCard from "../components/QuoteCard";
+import MoodCheckin from "../components/MoodCheckin";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -763,6 +765,8 @@ export default function Dashboard() {
           <motion.div key="history"
             initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }}>
 
+            <MoodCheckin />
+
             {history.length === 0 ? (
               /* Empty state */
               <div style={{ textAlign: "center", padding: "70px 20px" }}>
@@ -990,6 +994,10 @@ export default function Dashboard() {
                     body={<>The training dataset is <strong>{s.high_pct}% High</strong>, <strong>{s.moderate_pct}% Moderate</strong>, <strong>{s.low_pct}% Low</strong>. Your personal breakdown is <strong>{history.length ? Math.round((histHigh/history.length)*100) : 0}% High</strong> across {history.length} assessment{history.length !== 1 ? "s" : ""}.</>}
                   />
                 </div>
+                <QuoteCard
+                  level={histHigh / (history.length || 1) > 0.5 ? "High" : histMed / (history.length || 1) > 0.5 ? "Medium" : "Low"}
+                  style={{ marginTop: 16 }}
+                />
 
               </>
             )}

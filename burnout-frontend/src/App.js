@@ -9,6 +9,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 
 import Navbar from "./components/Navbar";
+import OnboardingModal from "./components/OnboardingModal";
 import Background from "./components/Background";
 import ChatBot from "./components/ChatBot";
 import Toaster from "./components/Toaster";
@@ -20,6 +21,7 @@ import Predict from "./pages/Predict";
 import Flowchart from "./pages/Flowchart";
 import Landing from "./pages/Landing";
 import ForgotPassword from "./pages/ForgotPassword";
+import NotFound from "./pages/NotFound";
 
 import { ThemeProvider } from "./context/ThemeContext";
 import { ToastProvider } from "./context/ToastContext";
@@ -89,7 +91,7 @@ function AppRoutes({ isLoggedIn, setIsLoggedIn }) {
           }
         />
 
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </AnimatePresence>
   );
@@ -97,6 +99,9 @@ function AppRoutes({ isLoggedIn, setIsLoggedIn }) {
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    return !localStorage.getItem("onboardingDone") && !localStorage.getItem("token");
+  });
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -132,6 +137,7 @@ function App() {
             <AppRoutes isLoggedIn={isLoggedIn} setIsLoggedIn={setIsLoggedIn} />
             {isLoggedIn && <ChatBot />}
           </div>
+          {showOnboarding && <OnboardingModal onClose={() => setShowOnboarding(false)} />}
         </Router>
       </ToastProvider>
     </ThemeProvider>

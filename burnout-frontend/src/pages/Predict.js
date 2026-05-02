@@ -1,11 +1,13 @@
 import React, { useState, useMemo } from "react";
 import axios from "axios";
+import confetti from "canvas-confetti";
 import "../App.css";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../context/ToastContext";
 import Badge from "../components/Badge";
 import API_BASE from "../utils/api";
+import { jsPDF } from "jspdf";
 
 const QUESTIONS = [
   { q: "How many hours do you study daily?",         type: "Academic",     icon: "📚", tip: "Too much studying without breaks can increase burnout." },
@@ -136,6 +138,17 @@ function Predict() {
         top_drivers: data.top_drivers ?? [],
       });
       setResult(label);
+      // Confetti celebration for Low risk
+      if (data.prediction === "Low" || data.risk === 0) {
+        setTimeout(() => {
+          confetti({
+            particleCount: 120,
+            spread: 80,
+            origin: { y: 0.6 },
+            colors: ["#22c55e", "#00d4ff", "#7c5cff", "#f59e0b"],
+          });
+        }, 600);
+      }
       // Fetch trend + feature importance
       try {
         const token2   = localStorage.getItem("token");
@@ -179,7 +192,169 @@ function Predict() {
     setValue(5);
   };
 
+  const downloadPDF = () => {
+    const doc = new jsPDF({ unit: "mm", format: "a4" });
+    const W = 210; // A4 width mm
+    const margin = 20;
+    let y = 20;
+
+    // Header bar
+    doc.setFillColor(124, 92, 255);
+    doc.rect(0, 0, W, 14, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.text("BurnoutAI — Woxsen University Wellness", margin, 9);
+    doc.text(new Date().toLocaleDateString(), W - margin, 9, { align: "right" });
+
+    y = 28;
+    // Title
+    doc.setTextColor(30, 30, 40);
+    doc.setFontSize(22);
+    doc.setFont("helvetica", "bold");
+    doc.text("Burnout Assessment Report", margin, y);
+    y += 10;
+
+    // Risk badge box
+    const riskColor = mlResult?.prediction === "High" ? [239, 68, 68]
+      : mlResult?.prediction === "Low" ? [34, 197, 94] : [245, 158, 11];
+    doc.setFillColor(...riskColor);
+    doc.roundedRect(margin, y, 60, 14, 3, 3, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(11);
+    doc.text(`${mlResult?.prediction || "—"} Burnout Risk`, margin + 30, y + 9, { align: "center" });
+    y += 22;
+
+    // Confidence
+    if (mlResult?.confidence) {
+      doc.setTextColor(80, 80, 100);
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Model confidence: ${mlResult.confidence}%`, margin, y);
+      y += 8;
+    }
+
+    // Divider
+    doc.setDrawColor(200, 200, 220);
+    doc.line(margin, y, W - margin, y);
+    y += 10;
+
+    // Your inputs
+    doc.setTextColor(30, 30, 40);
+    doc.setFontSize(13);
+    doc.setFont("helvetica", "bold");
+    doc.text("Your Inputs", margin, y);
+    y += 8;
+
+    const inputs = JSON.parse(localStorage.getItem("burnoutFeatures") || "null");
+    if (inputs) {
+      const rows = [
+        ["Study hours/day",    `${inputs.study_hours_per_day} h`],
+        ["Sleep hours/day",    `${inputs.sleep_hours_per_day} h`],
+        ["Social hours/day",   `${inputs.social_hours_per_day} h`],
+        ["Physical activity",  `${inputs.physical_activity_hours_per_day} h`],
+      ];
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      rows.forEach(([label, val]) => {
+        doc.setTextColor(80, 80, 100);
+        doc.text(label, margin, y);
+        doc.setTextColor(30, 30, 40);
+        doc.setFont("helvetica", "bold");
+        doc.text(val, margin + 70, y);
+        doc.setFont("helvetica", "normal");
+        y += 7;
+      });
+    }
+    y += 4;
+
+    // Top risk drivers
+    if (mlResult?.top_drivers?.length) {
+      doc.setDrawColor(200, 200, 220);
+      doc.line(margin, y, W - margin, y);
+      y += 8;
+      doc.setFontSize(13);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(30, 30, 40);
+      doc.text("Top Risk Drivers", margin, y);
+      y += 8;
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      mlResult.top_drivers.slice(0, 3).forEach((d, i) => {
+        doc.setTextColor(80, 80, 100);
+        doc.text(`${i + 1}. ${d.label} — ${d.direction === "risk" ? "Above average (risk)" : "Below average (protective)"}`, margin, y);
+        y += 7;
+      });
+    }
+    y += 4;
+
+    // Recovery advice
+    doc.setDrawColor(200, 200, 220);
+    doc.line(margin, y, W - margin, y);
+    y += 8;
+    doc.setFontSize(13);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(30, 30, 40);
+    doc.text("Recommended Next Steps", margin, y);
+    y += 8;
+
+    const advice = mlResult?.prediction === "High"
+      ? ["Prioritise sleep — aim for 7-8 hours tonight", "Reduce study load by 1-2 hours for the next week", "Schedule a session with the Woxsen wellness team", "Try 5 minutes of box breathing daily"]
+      : mlResult?.prediction === "Medium"
+      ? ["Maintain consistent sleep schedule", "Add a 20-minute walk to your daily routine", "Connect with a friend this week", "Track your mood daily using the app"]
+      : ["Keep your current routine — it's working", "Continue your recovery plan steps", "Help a peer who might be struggling", "Schedule your next check-in in 3 days"];
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    advice.forEach((tip) => {
+      doc.setTextColor(80, 80, 100);
+      doc.text(`• ${tip}`, margin, y);
+      y += 7;
+    });
+    y += 4;
+
+    // Counsellor contact (if High)
+    if (mlResult?.prediction === "High") {
+      doc.setFillColor(254, 242, 242);
+      doc.roundedRect(margin, y, W - margin * 2, 28, 3, 3, "F");
+      doc.setTextColor(185, 28, 28);
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.text("Woxsen Wellness Counsellors", margin + 4, y + 7);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(80, 40, 40);
+      doc.text("Dr. Poorva Shinde: calendly.com/wellness-centre-ryu/counselling", margin + 4, y + 14);
+      doc.text("Ms. Mohua Das: calendly.com/mohua-das-woxsen/new-meeting", margin + 4, y + 21);
+      y += 34;
+    }
+
+    // Footer
+    doc.setFillColor(245, 245, 250);
+    doc.rect(0, 282, W, 15, "F");
+    doc.setTextColor(140, 140, 160);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.text("Generated by BurnoutAI · Woxsen University · Free & Confidential", W / 2, 290, { align: "center" });
+
+    doc.save(`burnout-report-${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
+
   const getEmoji = () => (value <= 3 ? "😌" : value <= 7 ? "😐" : "😫");
+
+  // Trend prediction: estimate days to Low risk
+  const trendDaysToLow = (() => {
+    const t = mlInsights?.trend;
+    if (!t || t.direction === "improving" === false) return null;
+    if (t.direction !== "improving") return null;
+    const riskNum = { Low: 0, Medium: 1, High: 2 };
+    const currentRisk = riskNum[mlResult?.prediction] ?? 1;
+    if (currentRisk === 0) return null;
+    const slope = Math.abs(t.slope); // improvement per assessment
+    if (slope < 0.05) return null;
+    const assessmentsNeeded = Math.ceil(currentRisk / slope);
+    // assume 1 assessment every 2 days
+    return Math.min(assessmentsNeeded * 2, 60);
+  })();
 
   /* ======================= RESULT VIEW ======================= */
   if (result) {
@@ -234,6 +409,16 @@ function Predict() {
                 </Badge>
               )}
             </div>
+            {trendDaysToLow && (
+              <div style={{
+                marginTop: 8, fontSize: 12, color: "var(--text-muted)",
+                display: "flex", alignItems: "center", gap: 6,
+                justifyContent: "center",
+              }}>
+                <span>🎯</span>
+                <span>At this pace, you could reach <strong style={{ color: "#22c55e" }}>Low risk</strong> in roughly <strong style={{ color: "var(--accent-1)" }}>~{trendDaysToLow} days</strong></span>
+              </div>
+            )}
 
             <h1 style={{ fontSize: 38, marginBottom: 8, color: riskColor }}>{result}</h1>
             <p style={{ marginBottom: 24, color: "var(--text-muted)" }}>
@@ -347,6 +532,20 @@ function Predict() {
             <button className="btn-ghost" onClick={handleShare} style={{ width: "auto", padding: "13px 22px" }}>
               📤 Share result
             </button>
+            <motion.button
+              whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+              onClick={downloadPDF}
+              style={{
+                display: "flex", alignItems: "center", gap: 8,
+                padding: "10px 22px", borderRadius: "var(--r-md)",
+                border: "1px solid var(--border-strong)",
+                background: "var(--surface)", color: "var(--text)",
+                fontSize: 13, fontWeight: 700, cursor: "pointer",
+                marginTop: 12,
+              }}
+            >
+              📄 Download PDF Report
+            </motion.button>
             <button className="btn-ghost" onClick={handleRestart} style={{ width: "auto", padding: "13px 22px" }}>
               ↺ Retake
             </button>
