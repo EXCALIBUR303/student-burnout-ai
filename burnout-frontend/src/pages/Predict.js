@@ -7,6 +7,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../context/ToastContext";
 import Badge from "../components/Badge";
+import TiltCard from "../components/TiltCard";
+import AnimatedNumber from "../components/AnimatedNumber";
 import API_BASE from "../utils/api";
 import { jsPDF } from "jspdf";
 
@@ -456,6 +458,7 @@ function Predict() {
           style={{ maxWidth: 720, margin: "40px auto" }}
         >
           {/* ── Result card ── */}
+          <TiltCard>
           <div className="chart-card result-card" style={{ textAlign: "center", padding: "40px 32px", borderTop: `4px solid ${riskColor}` }}>
             {/* Glowing icon */}
             <motion.div
@@ -512,7 +515,7 @@ function Predict() {
                 </motion.div>
               </div>
               <div style={{ textAlign: "center", marginTop: 10, fontSize: 13, color: "var(--text-muted)" }}>
-                Risk index: <span style={{ fontWeight: 700, color: riskColor }}>{riskPct}/100</span>
+                Risk index: <span style={{ fontWeight: 700, color: riskColor }}><AnimatedNumber value={riskPct} />/100</span>
               </div>
             </div>
 
@@ -591,6 +594,7 @@ function Predict() {
               </div>
             )}
           </div>
+          </TiltCard>
 
           {/* ── Personalised insights ── */}
           <div className="chart-card" style={{ marginTop: 16 }}>

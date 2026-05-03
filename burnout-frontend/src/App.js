@@ -10,7 +10,8 @@ import { motion, AnimatePresence } from "framer-motion";
 
 import Navbar from "./components/Navbar";
 import OnboardingModal from "./components/OnboardingModal";
-import Background from "./components/Background";
+import AuroraBackground from "./components/AuroraBackground";
+import MagneticCursor from "./components/MagneticCursor";
 import ChatBot from "./components/ChatBot";
 import Toaster from "./components/Toaster";
 import BottomNav from "./components/BottomNav";
@@ -158,7 +159,8 @@ function App() {
     <ThemeProvider>
       <ToastProvider>
         <Router>
-          <Background />
+          <AuroraBackground />
+          <MagneticCursor />
           <Toaster />
 
           <div style={{ position: "relative", zIndex: 1, minHeight: "100vh" }}>

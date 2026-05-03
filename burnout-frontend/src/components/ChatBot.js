@@ -224,8 +224,20 @@ export default function ChatBot({ userContext = "", onClose, forceOpen }) {
         {!open && (
           <motion.button
             key="fab"
-            initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 260, damping: 20 }}
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{
+              scale: [1, 1.06, 1],
+              opacity: 1,
+              boxShadow: [
+                "0 4px 20px rgba(124,92,255,0.4)",
+                "0 4px 32px rgba(124,92,255,0.7)",
+                "0 4px 20px rgba(124,92,255,0.4)",
+              ],
+            }}
+            exit={{ scale: 0, opacity: 0 }}
+            transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+            whileHover={{ scale: 1.12 }}
+            whileTap={{ scale: 0.95 }}
             onClick={() => setOpen(true)}
             style={styles.fab}
             aria-label="Open chat"

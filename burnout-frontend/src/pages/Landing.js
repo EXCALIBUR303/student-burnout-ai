@@ -124,7 +124,7 @@ export default function Landing() {
           AI model · trained on 10,000+ student behaviour patterns
         </motion.div>
 
-        <motion.h1 initial="hidden" animate="show" custom={1} variants={fadeUp}>
+        <motion.h1 className="hero-title" initial="hidden" animate="show" custom={1} variants={fadeUp}>
           Stop burning out{" "}
           <span className="grad-text-rainbow">before it stops you.</span>
         </motion.h1>
