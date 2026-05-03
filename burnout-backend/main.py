@@ -135,7 +135,12 @@ app.add_middleware(
 )
 
 # ===== MODEL =====
-model = joblib.load("stress_model.pkl")
+import numpy as np  # needed for feature importance averaging across calibration folds
+_V3_PKL = "stress_model_v3.pkl"
+_V2_PKL = "stress_model.pkl"
+_active_pkl = _V3_PKL if os.path.exists(_V3_PKL) else _V2_PKL
+model = joblib.load(_active_pkl)
+print(f"[model] loaded {_active_pkl}")
 labels = {0: "Low", 1: "Medium", 2: "High"}
 
 # v2 model — 14 features (7 base + 7 engineered)
@@ -267,10 +272,20 @@ def offline_chat(message: str) -> str:
 
 _feature_importance_cache: list | None = None
 
+def _get_feature_importances(m) -> list:
+    """Extract feature importances from either a plain XGBoost or CalibratedClassifierCV."""
+    if hasattr(m, "feature_importances_"):
+        return list(m.feature_importances_)
+    if hasattr(m, "calibrated_classifiers_"):
+        folds = [c.estimator.feature_importances_ for c in m.calibrated_classifiers_]
+        return list(np.mean(folds, axis=0))
+    return [1.0 / len(FEATURE_NAMES)] * len(FEATURE_NAMES)
+
+
 def get_cached_feature_importance() -> list:
     global _feature_importance_cache
     if _feature_importance_cache is None:
-        importances = model.feature_importances_
+        importances = _get_feature_importances(model)
         total_imp   = sum(importances) or 1.0
         _feature_importance_cache = sorted(
             [
@@ -660,7 +675,7 @@ def predict(data: dict, request: Request):
         }
 
         # ── Top drivers ───────────────────────────────────────────────
-        importances = model.feature_importances_
+        importances = _get_feature_importances(model)
         total_imp   = sum(importances) or 1.0
         ranked      = sorted(
             zip(FEATURE_NAMES, importances),
