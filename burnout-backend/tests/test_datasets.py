@@ -2,7 +2,7 @@ import os, pandas as pd, pytest
 from datasets import (
     load_lifestyle, load_sleep_health, load_stress_level,
     load_social_media, load_depression, load_mental_health2,
-    load_sleep_patterns, load_all, UNIFIED_COLUMNS,
+    load_sleep_patterns, load_stress_survey, load_all, UNIFIED_COLUMNS,
 )
 
 @pytest.fixture(autouse=True)
@@ -23,6 +23,7 @@ def test_social_media():    _check(load_social_media())
 def test_depression():      _check(load_depression())
 def test_mental_health2():  _check(load_mental_health2())
 def test_sleep_patterns():  _check(load_sleep_patterns())
+def test_stress_survey():    _check(load_stress_survey())
 
 def test_load_all_schema():
     df = load_all()

@@ -6,7 +6,27 @@ from target_continuous, and returns a DataFrame (or None if the file is missing)
 """
 
 import os
+import numpy as np
 import pandas as pd
+
+
+def _safe_csv(path: str) -> pd.DataFrame | None:
+    """Read CSV if it exists, else return None."""
+    if not os.path.exists(path):
+        return None
+    try:
+        return pd.read_csv(path)
+    except Exception:
+        return None
+
+
+def _to_class(c: float) -> int:
+    """Bin a single continuous value in [0,1] into 0/1/2."""
+    if c < 0.33:
+        return 0
+    if c < 0.66:
+        return 1
+    return 2
 
 UNIFIED_COLUMNS = [
     "study_hours_per_day",
@@ -229,6 +249,52 @@ def load_sleep_patterns(path: str = "student_sleep_patterns.csv") -> pd.DataFram
     return _finalize(out, "sleep_patterns")
 
 
+def load_stress_survey(path: str = "Stress_Dataset.csv") -> pd.DataFrame | None:
+    """
+    Stress_Dataset.csv: 843 rows of 1-5 scale survey items.
+    Synthesizes a continuous burnout label from the average of key
+    symptom intensity scores — more robust than the imbalanced explicit target.
+    """
+    df = _safe_csv(path)
+    if df is None:
+        return None
+
+    symptom_keywords = [
+        "experienced stress", "rapid heartbeat", "anxiety or tension",
+        "sleep problems", "headaches", "irritated easily",
+        "trouble concentrating", "sadness or low mood", "lonely or isolated",
+        "overwhelmed with your academic", "lack confidence in your academic performanc",
+    ]
+    symptom_cols: list[str] = []
+    for kw in symptom_keywords:
+        for c in df.columns:
+            if kw.lower() in c.lower() and c not in symptom_cols:
+                symptom_cols.append(c)
+                break
+    if len(symptom_cols) < 5:
+        return None
+
+    # Average symptom intensity normalized to 0-1
+    sym = df[symptom_cols].apply(pd.to_numeric, errors="coerce")
+    cont = ((sym.mean(axis=1) - 1) / 4).clip(0, 1)  # 1-5 scale -> 0-1
+
+    out = pd.DataFrame({
+        "study_hours_per_day":             np.nan,
+        "sleep_hours_per_day":             np.nan,
+        "social_hours_per_day":            np.nan,
+        "physical_activity_hours_per_day": np.nan,
+        "gpa_norm":                        np.nan,
+        "screen_time_hours":               np.nan,
+        "extracurricular_hours":           np.nan,
+        "target_continuous":               cont,
+    })
+    out["target_class"] = out["target_continuous"].apply(
+        lambda c: _to_class(c) if pd.notna(c) else np.nan
+    )
+    out["source"] = "stress_survey"
+    return out.dropna(subset=["target_continuous"])[UNIFIED_COLUMNS]
+
+
 # ---------------------------------------------------------------------------
 # Combined loader
 # ---------------------------------------------------------------------------
@@ -244,6 +310,7 @@ def load_all() -> pd.DataFrame:
         load_depression,
         load_mental_health2,
         load_sleep_patterns,
+        load_stress_survey,
     ]
     frames = [fn() for fn in loaders]
     frames = [f for f in frames if f is not None and len(f) > 0]

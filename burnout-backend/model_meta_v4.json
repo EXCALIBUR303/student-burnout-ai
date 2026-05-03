@@ -1,0 +1,36 @@
+{
+  "version": "4.0",
+  "features": [
+    "study_hours_per_day",
+    "sleep_hours_per_day",
+    "social_hours_per_day",
+    "physical_activity_hours_per_day",
+    "gpa_norm",
+    "screen_time_hours",
+    "extracurricular_hours",
+    "study_sleep_ratio",
+    "sleep_deficit",
+    "burnout_index",
+    "active_hours",
+    "rest_ratio",
+    "productive_vs_leisure",
+    "hourly_load"
+  ],
+  "honesty_holdout_accuracy": 0.5205,
+  "honesty_holdout_logloss": 3.1688,
+  "n_train": 32423,
+  "n_test": 2000,
+  "best_xgb_params": {
+    "n_estimators": 600,
+    "max_depth": 3,
+    "learning_rate": 0.02801497339765478,
+    "subsample": 0.7078608441996485,
+    "colsample_bytree": 0.9242787836210083,
+    "min_child_weight": 10,
+    "reg_alpha": 0.40584204049322115,
+    "reg_lambda": 0.897320090445014
+  },
+  "best_xgb_cv_accuracy": 0.6451,
+  "ensemble": "Stacking[XGB+LGBM]+LogReg, isotonic-calibrated",
+  "optuna_trials": 60
+}
