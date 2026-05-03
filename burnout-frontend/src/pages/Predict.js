@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import html2canvas from "html2canvas";
 import axios from "axios";
 import confetti from "canvas-confetti";
@@ -12,56 +12,100 @@ import AnimatedNumber from "../components/AnimatedNumber";
 import API_BASE from "../utils/api";
 import { jsPDF } from "jspdf";
 
+// 8 questions total: 7 objective hours/values for the model + 1 wellness for chatbot context
 const QUESTIONS = [
-  { q: "How many hours do you study daily?",         type: "Academic",     icon: "📚", tip: "Too much studying without breaks can increase burnout." },
-  { q: "How many hours do you sleep daily?",         type: "Sleep",        icon: "😴", tip: "Less than 6–7 hours noticeably increases fatigue." },
-  { q: "How stressed do you feel due to academics?", type: "Academic",     icon: "🎓", tip: "Sustained pressure is a leading burnout driver." },
-  { q: "How mentally exhausted do you feel?",        type: "Mental",       icon: "🧠", tip: "Frequent exhaustion is a key early sign." },
-  { q: "Daily screen time (hours)?",                 type: "Digital",      icon: "📱", tip: "Excessive screen time hurts focus and sleep." },
-  { q: "How anxious do you feel?",                   type: "Mental",       icon: "💭", tip: "Anxiety compounds burnout risk." },
-  { q: "How physically active are you?",             type: "Lifestyle",    icon: "🏃", tip: "Regular movement measurably reduces stress." },
-  { q: "How socially active are you?",               type: "Social",       icon: "👥", tip: "Isolation increases vulnerability to burnout." },
-  { q: "How good is your concentration?",            type: "Productivity", icon: "🎯", tip: "Dropping focus often precedes exhaustion." },
-  { q: "How often do you procrastinate?",            type: "Productivity", icon: "⏳", tip: "Procrastination spirals into avoidance stress." },
-  { q: "What is your current GPA (out of 10)?",      type: "Academic",     icon: "🏅", tip: "Academic performance patterns correlate with stress levels." },
+  {
+    key: "study", icon: "📚", type: "Academic",
+    q: "On an average day, how many hours do you study?",
+    tip: "Include classes, homework, and self-study. Be honest — averaging 9+ hours is a major burnout signal.",
+    inputType: "hours", min: 0, max: 14, step: 0.5, default: 5,
+    presets: [2, 4, 6, 8, 10],
+  },
+  {
+    key: "sleep", icon: "😴", type: "Sleep",
+    q: "How many hours do you sleep on a typical night?",
+    tip: "Less than 7 hours nightly is the strongest predictor of burnout in students.",
+    inputType: "hours", min: 3, max: 12, step: 0.5, default: 7,
+    presets: [4, 5, 6, 7, 8, 9],
+  },
+  {
+    key: "social", icon: "👥", type: "Social",
+    q: "How many hours per day do you spend socialising in person?",
+    tip: "Real-world social contact is one of the strongest protective factors against burnout.",
+    inputType: "hours", min: 0, max: 8, step: 0.5, default: 1.5,
+    presets: [0, 1, 2, 3, 4],
+  },
+  {
+    key: "physical", icon: "🏃", type: "Lifestyle",
+    q: "How many hours per day do you do physical activity?",
+    tip: "Even a 20-minute walk counts. 150 min/week (~22 min/day) is the WHO baseline.",
+    inputType: "hours", min: 0, max: 4, step: 0.25, default: 0.75,
+    presets: [0, 0.5, 1, 1.5, 2],
+  },
+  {
+    key: "screen", icon: "📱", type: "Digital",
+    q: "How many hours per day do you spend on phone/screens (non-study)?",
+    tip: "Average uni student: 4–6 hours. Above 6 hours is associated with sleep disruption and rumination.",
+    inputType: "hours", min: 0, max: 14, step: 0.5, default: 3.5,
+    presets: [1, 3, 5, 7, 10],
+  },
+  {
+    key: "gpa", icon: "🏅", type: "Academic",
+    q: "What is your current GPA (out of 10)?",
+    tip: "Lower GPA correlates with academic stress, but high GPA from cramming is also a risk pattern.",
+    inputType: "gpa", min: 0, max: 10, step: 0.1, default: 7.5,
+    presets: [5, 6, 7, 8, 9],
+  },
+  {
+    key: "extra", icon: "🎭", type: "Activities",
+    q: "How many hours per day on clubs / extracurricular activities?",
+    tip: "Mild engagement (~1 hour) is protective. Over-commitment (3+ hrs) compounds load.",
+    inputType: "hours", min: 0, max: 5, step: 0.25, default: 0.5,
+    presets: [0, 0.5, 1, 2, 3],
+  },
+  {
+    key: "mood", icon: "💭", type: "Wellness",
+    q: "Right now, how would you rate your overall stress?",
+    tip: "This helps the chatbot give you contextual support — it's NOT used by the ML model itself.",
+    inputType: "mood", min: 0, max: 10, step: 1, default: 5,
+    moodLabels: ["😌 Calm", "😊 Light", "😐 OK", "😟 Tense", "😣 Heavy", "😫 Overwhelmed"],
+  },
 ];
 
-// Map 0-10 slider answers to all 7 base API features (model v2)
-const mapToApiFeatures = (answers) => ({
-  study_hours_per_day:             parseFloat((answers[0] * 1.2).toFixed(1)),      // Q0: 0-12h
-  sleep_hours_per_day:             parseFloat((4 + answers[1] * 0.8).toFixed(1)),  // Q1: 4-12h
-  physical_activity_hours_per_day: parseFloat((answers[6] * 0.4).toFixed(1)),      // Q6: 0-4h
-  social_hours_per_day:            parseFloat((answers[7] * 0.6).toFixed(1)),      // Q7: 0-6h
-  screen_time_hours:               parseFloat((answers[4] * 1.6).toFixed(1)),      // Q4: 0-16h
-  gpa_norm:                        parseFloat(((answers[10] ?? 7) / 10.0).toFixed(2)), // Q10: GPA/10
-  extracurricular_hours:           1.0,                                             // sensible default
+const mapToApiFeatures = (answersObj) => ({
+  study_hours_per_day:             parseFloat(Number(answersObj.study).toFixed(1)),
+  sleep_hours_per_day:             parseFloat(Number(answersObj.sleep).toFixed(1)),
+  social_hours_per_day:            parseFloat(Number(answersObj.social).toFixed(1)),
+  physical_activity_hours_per_day: parseFloat(Number(answersObj.physical).toFixed(2)),
+  screen_time_hours:               parseFloat(Number(answersObj.screen).toFixed(1)),
+  gpa_norm:                        parseFloat((Number(answersObj.gpa) / 10).toFixed(2)),
+  extracurricular_hours:           parseFloat(Number(answersObj.extra).toFixed(2)),
 });
 
-const calculateLocalScore = (data) => {
+const calculateLocalScore = (a) => {
   let s = 0;
-  if (data[0] > 7) s += 2;
-  if (data[1] < 5) s += 2;
-  if (data[2] > 6) s += 2;
-  if (data[3] > 6) s += 2;
-  if (data[4] > 7) s += 1;
-  if (data[5] > 6) s += 2;
-  if (data[6] < 3) s += 1;
-  if (data[7] < 3) s += 1;
-  if (data[8] < 4) s += 2;
-  if (data[9] > 6) s += 1;
+  if (a.study   > 8)    s += 3;
+  if (a.study   > 10)   s += 2;
+  if (a.sleep   < 6)    s += 4;
+  if (a.sleep   < 5)    s += 2;
+  if (a.social  < 1)    s += 2;
+  if (a.physical< 0.5)  s += 2;
+  if (a.screen  > 6)    s += 2;
+  if (a.screen  > 10)   s += 2;
+  if (a.gpa     < 5)    s += 2;
+  if (a.extra   > 3)    s += 1;
+  if (a.mood   != null && a.mood > 6) s += 2;
   return s;
 };
 
-const getPersonalisedInsights = (answers, features) => {
+const getPersonalisedInsights = (a, features) => {
   const insights = [];
-  const {
-    study_hours_per_day: study,
-    sleep_hours_per_day: sleep,
-    physical_activity_hours_per_day: physical,
-    social_hours_per_day: social,
-    screen_time_hours: screenTime,
-    gpa_norm: gpaNorm,
-  } = features;
+  const study = features.study_hours_per_day;
+  const sleep = features.sleep_hours_per_day;
+  const physical = features.physical_activity_hours_per_day;
+  const social = features.social_hours_per_day;
+  const screen = features.screen_time_hours;
+  const gpa = features.gpa_norm * 10;
 
   if (study > 8)
     insights.push({ icon: "📚", title: "Study overload", desc: `~${study}h/day is above the safe zone. Try 45-min blocks with 15-min breaks.` });
@@ -73,8 +117,8 @@ const getPersonalisedInsights = (answers, features) => {
   else if (sleep >= 8)
     insights.push({ icon: "😴", title: "Good sleep", desc: `${sleep}h sleep is great — protect this habit at all costs.` });
 
-  if (answers[5] > 7)
-    insights.push({ icon: "💭", title: "High anxiety", desc: "Elevated anxiety detected. Box breathing (4s in / 4s hold / 4s out) helps instantly." });
+  if (a && a.mood != null && a.mood > 7)
+    insights.push({ icon: "💭", title: "High stress right now", desc: "Elevated stress detected. Box breathing (4s in / 4s hold / 4s out) helps instantly." });
 
   if (physical < 0.8)
     insights.push({ icon: "🏃", title: "Very low activity", desc: "Under 30 min of movement per day. Even a 20-min walk cuts cortisol significantly." });
@@ -82,13 +126,10 @@ const getPersonalisedInsights = (answers, features) => {
   if (social < 1)
     insights.push({ icon: "👥", title: "Social withdrawal", desc: "Low social time detected. Schedule one low-effort catch-up this week." });
 
-  if (answers[9] > 7)
-    insights.push({ icon: "⏳", title: "Procrastination spike", desc: "High procrastination → avoidance stress spiral. Break tasks into 10-min chunks." });
-
-  if ((screenTime ?? answers[4] * 1.6) > 6)
+  if (screen > 6)
     insights.push({ icon: "📱", title: "Screen overload", desc: "High screen time disrupts melatonin and sleep quality. Set a screen curfew at 10 pm." });
 
-  if (gpaNorm !== undefined && gpaNorm < 0.5)
+  if (gpa !== undefined && gpa < 5)
     insights.push({ icon: "🏅", title: "GPA pressure", desc: "Lower GPA creates stress spirals. Talk to an academic advisor — small adjustments early make a big difference." });
 
   // Always have at least 3 insights
@@ -107,8 +148,8 @@ function Predict() {
   const { toast } = useToast();
 
   const [current, setCurrent] = useState(0);
-  const [answers, setAnswers]   = useState([]);
-  const [value, setValue]       = useState(5);
+  const [answersObj, setAnswersObj] = useState({});
+  const [value, setValue]       = useState(QUESTIONS[0].default);
   const [result, setResult]     = useState(null);
   const [mlResult, setMlResult] = useState(null);
   const [features, setFeatures] = useState(null);
@@ -117,7 +158,15 @@ function Predict() {
 
   const shareCardRef = useRef();
 
-  const liveScore  = useMemo(() => calculateLocalScore([...answers, value]), [answers, value]);
+  useEffect(() => {
+    setValue(answersObj[QUESTIONS[current]?.key] ?? QUESTIONS[current]?.default ?? 5);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current]);
+
+  const liveScore = useMemo(() => {
+    const provisional = { ...answersObj, [QUESTIONS[current].key]: value };
+    return calculateLocalScore(provisional);
+  }, [answersObj, value, current]);
   const liveStatus = liveScore >= 12
     ? { label: "High",     variant: "danger",  icon: "🔥" }
     : liveScore >= 6
@@ -125,16 +174,16 @@ function Predict() {
     : { label: "Low",      variant: "success", icon: "🌱" };
 
   const handleNext = async () => {
-    const updated = [...answers, value];
-    setAnswers(updated);
+    const key = QUESTIONS[current].key;
+    const updated = { ...answersObj, [key]: value };
+    setAnswersObj(updated);
 
     if (current < QUESTIONS.length - 1) {
       setCurrent(current + 1);
-      setValue(5);
       return;
     }
 
-    // Last question — call ML backend
+    // Done — call ML backend
     setLoading(true);
     const mapped = mapToApiFeatures(updated);
     setFeatures(mapped);
@@ -148,46 +197,30 @@ function Predict() {
       const label = data.prediction === "High" ? "High Burnout"
                   : data.prediction === "Medium" ? "Medium Burnout"
                   : "Low Burnout";
-
-      // Save full prediction snapshot for chat context
       localStorage.setItem("lastPrediction", JSON.stringify({
-        prediction: data.prediction,
-        risk: data.risk,
-        confidence: data.confidence,
-        features: mapped,
-        prediction_id: data.prediction_id ?? null,
+        prediction: data.prediction, risk: data.risk, confidence: data.confidence,
+        features: mapped, prediction_id: data.prediction_id ?? null,
       }));
-
       setMlResult({
-        label:       data.prediction,
-        risk:        data.risk,
-        confidence:  data.confidence  ?? null,
+        label: data.prediction, risk: data.risk,
+        confidence: data.confidence ?? null,
         top_drivers: data.top_drivers ?? [],
       });
       setResult(label);
-      // Confetti celebration for Low risk
       if (data.prediction === "Low" || data.risk === 0) {
         setTimeout(() => {
-          confetti({
-            particleCount: 120,
-            spread: 80,
-            origin: { y: 0.6 },
-            colors: ["#22c55e", "#00d4ff", "#7c5cff", "#f59e0b"],
-          });
+          confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 },
+            colors: ["#22c55e", "#00d4ff", "#7c5cff", "#f59e0b"] });
         }, 600);
       }
-      // Fetch trend + feature importance
       try {
-        const token2   = localStorage.getItem("token");
-        const headers2 = token2 ? { Authorization: `Bearer ${token2}` } : {};
-        const ins = await axios.get(`${API_BASE}/insights`, { headers: headers2 });
+        const ins = await axios.get(`${API_BASE}/insights`, { headers });
         setMlInsights(ins.data);
       } catch {}
       localStorage.setItem("burnoutResult", label);
       localStorage.setItem("burnoutRisk", String(data.risk));
       toast.success("Assessment complete", `ML result: ${data.prediction} stress`);
     } catch {
-      // Fallback to local score if backend is unreachable
       const final = calculateLocalScore(updated);
       const label = final >= 12 ? "High Burnout" : final >= 6 ? "Medium Burnout" : "Low Burnout";
       const risk  = final >= 12 ? 2 : final >= 6 ? 1 : 0;
@@ -203,20 +236,15 @@ function Predict() {
 
   const handleBack = () => {
     if (current === 0) return;
-    const prev = [...answers];
-    const last = prev.pop();
-    setAnswers(prev);
     setCurrent(current - 1);
-    setValue(last ?? 5);
   };
 
   const handleRestart = () => {
     setCurrent(0);
-    setAnswers([]);
+    setAnswersObj({});
     setResult(null);
     setMlResult(null);
     setFeatures(null);
-    setValue(5);
   };
 
   const downloadPDF = () => {
@@ -366,8 +394,6 @@ function Predict() {
     doc.save(`burnout-report-${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
-  const getEmoji = () => (value <= 3 ? "😌" : value <= 7 ? "😐" : "😫");
-
   // Trend prediction: estimate days to Low risk
   const trendDaysToLow = (() => {
     const t = mlInsights?.trend;
@@ -390,7 +416,7 @@ function Predict() {
     const riskColor   = variant === "danger" ? "var(--danger)" : variant === "warning" ? "var(--warning)" : "var(--success)";
     const riskPct     = mlResult ? (mlResult.risk === 2 ? 82 : mlResult.risk === 1 ? 48 : 18) : 30;
     const savedFeatures = features || JSON.parse(localStorage.getItem("burnoutFeatures") || "{}");
-    const savedAnswers  = answers.length ? answers : JSON.parse(localStorage.getItem("burnoutAnswers") || "[]");
+    const savedAnswers = JSON.parse(localStorage.getItem("burnoutAnswers") || "{}");
     const insights = getPersonalisedInsights(savedAnswers, savedFeatures);
 
     const sendFeedback = async (accurate) => {
@@ -747,11 +773,12 @@ function Predict() {
 
   /* ======================= QUESTIONNAIRE VIEW ======================= */
   const q = QUESTIONS[current];
+  const isMood = q.inputType === "mood";
 
   return (
     <div className="dashboard-container" style={{ maxWidth: 760 }}>
       <h1 className="dashboard-title">AI Burnout Assessment</h1>
-      <p className="dashboard-subtitle">Answer honestly — there are no wrong answers.</p>
+      <p className="dashboard-subtitle">8 quick questions. Be honest — the model gets sharper with real numbers.</p>
 
       {/* Stepper */}
       <div className="stepper" aria-label="Progress">
@@ -760,19 +787,18 @@ function Predict() {
         ))}
       </div>
 
-      {/* Live score */}
-      <motion.div
-        className="chart-card"
+      {/* Live score card */}
+      <motion.div className="chart-card"
         style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}
-        layout
-      >
+        layout transition={{ type: "spring", stiffness: 300, damping: 30 }}>
         <div>
-          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em",
+            textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>
             Live burnout score
           </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-            <div className="mono" style={{ fontSize: 36, fontWeight: 700, color: "var(--text)", lineHeight: 1 }}>{liveScore}</div>
-            <span style={{ color: "var(--text-dim)", fontSize: 13 }}>/ 17</span>
+            <div className="mono" style={{ fontSize: 36, fontWeight: 700, lineHeight: 1 }}>{liveScore}</div>
+            <span style={{ color: "var(--text-dim)", fontSize: 13 }}>/ 22</span>
           </div>
         </div>
         <Badge variant={liveStatus.variant} icon={liveStatus.icon}>{liveStatus.label}</Badge>
@@ -783,10 +809,10 @@ function Predict() {
         <motion.div
           key={current}
           className="chart-card"
-          initial={{ opacity: 0, x: 40 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -40 }}
-          transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+          initial={{ opacity: 0, y: 30, scale: 0.97 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -30, scale: 0.97 }}
+          transition={{ type: "spring", stiffness: 260, damping: 26 }}
         >
           <div className="question-meta">
             <span className="question-category"><span>{q.icon}</span>{q.type}</span>
@@ -795,42 +821,99 @@ function Predict() {
 
           <h2 style={{ fontSize: 22, marginTop: 14, marginBottom: 20 }}>{q.q}</h2>
 
-          <div style={{ display: "flex", gap: 10, padding: 14, borderRadius: "var(--r-md)", background: "var(--info-bg)", border: "1px solid var(--info)", fontSize: 13, marginBottom: 24 }}>
+          {/* Tip box */}
+          <div style={{ display: "flex", gap: 10, padding: 14, borderRadius: "var(--r-md)",
+            background: "var(--info-bg)", border: "1px solid var(--info)", fontSize: 13, marginBottom: 24 }}>
             <span style={{ fontSize: 16 }}>💡</span>
             <span style={{ color: "var(--text)" }}>{q.tip}</span>
           </div>
 
-          <div style={{ fontSize: 46, textAlign: "center", marginBottom: 12, transition: "transform 0.2s" }}>
-            {getEmoji()}
-          </div>
+          {/* Big value display */}
+          <motion.div
+            key={value}
+            initial={{ scale: 0.9, opacity: 0.5 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: "spring", stiffness: 400, damping: 25 }}
+            style={{ textAlign: "center", marginBottom: 20 }}>
+            {isMood ? (
+              <div style={{ fontSize: 60 }}>
+                {q.moodLabels[Math.min(Math.floor(value / 2), q.moodLabels.length - 1)].split(" ")[0]}
+              </div>
+            ) : (
+              <>
+                <div style={{ fontSize: 64, fontWeight: 800, color: "var(--accent-1)",
+                  lineHeight: 1, fontVariantNumeric: "tabular-nums",
+                  background: "var(--grad-primary, linear-gradient(135deg, #7c5cff, #00d4ff))",
+                  WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+                  backgroundClip: "text" }}>
+                  {Number(value).toFixed(q.step < 1 ? (q.step < 0.5 ? 2 : 1) : 0)}
+                </div>
+                <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4, fontWeight: 600 }}>
+                  {q.inputType === "gpa" ? "out of 10" : "hours per day"}
+                </div>
+              </>
+            )}
+          </motion.div>
 
-          <input
-            type="range"
-            className="burn-slider"
-            min={0} max={10} value={value}
-            onChange={(e) => setValue(Number(e.target.value))}
+          {/* Slider */}
+          <input type="range" className="burn-slider"
+            min={q.min} max={q.max} step={q.step} value={value}
+            onChange={(e) => setValue(parseFloat(e.target.value))}
             aria-label={q.q}
           />
 
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-dim)", marginTop: 10 }}>
-            <span>Low</span><span>Medium</span><span>High</span>
+          {/* Range labels */}
+          <div style={{ display: "flex", justifyContent: "space-between",
+            fontSize: 11, fontWeight: 600, letterSpacing: "0.08em",
+            textTransform: "uppercase", color: "var(--text-dim)", marginTop: 10 }}>
+            <span>{q.min}{q.inputType === "gpa" ? "" : "h"}</span>
+            <span>{q.max}{q.inputType === "gpa" ? "" : "h"}</span>
           </div>
 
-          <div style={{ textAlign: "center", marginTop: 14 }}>
-            <span style={{ color: "var(--text-muted)", fontSize: 13 }}>Value: </span>
-            <span className="mono" style={{ fontWeight: 700, fontSize: 18, color: "var(--text)" }}>{value}</span>
-          </div>
+          {/* Quick presets */}
+          {q.presets && (
+            <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginTop: 18 }}>
+              {q.presets.map((p) => (
+                <motion.button
+                  key={p}
+                  whileHover={{ scale: 1.05, y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setValue(p)}
+                  style={{
+                    padding: "8px 14px", fontSize: 13, fontWeight: 600,
+                    borderRadius: 999, cursor: "pointer", width: "auto",
+                    background: Math.abs(value - p) < 0.01 ? "var(--accent-1)" : "var(--surface)",
+                    color: Math.abs(value - p) < 0.01 ? "white" : "var(--text)",
+                    border: `1px solid ${Math.abs(value - p) < 0.01 ? "var(--accent-1)" : "var(--border)"}`,
+                    transition: "all 0.2s",
+                  }}
+                >
+                  {p}{q.inputType === "gpa" ? "" : "h"}
+                </motion.button>
+              ))}
+            </div>
+          )}
+
+          {/* Mood label below */}
+          {isMood && (
+            <div style={{ textAlign: "center", marginTop: 16, fontSize: 14, color: "var(--text-muted)" }}>
+              {q.moodLabels[Math.min(Math.floor(value / 2), q.moodLabels.length - 1)]}
+            </div>
+          )}
         </motion.div>
       </AnimatePresence>
 
-      {/* Nav */}
+      {/* Nav buttons */}
       <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
-        <button className="btn-ghost" onClick={handleBack} disabled={current === 0} style={{ width: "auto", padding: "13px 22px" }}>
+        <button className="btn-ghost" onClick={handleBack} disabled={current === 0}
+          style={{ width: "auto", padding: "13px 22px" }}>
           ← Back
         </button>
-        <button onClick={handleNext} style={{ flex: 1 }}>
-          {current === QUESTIONS.length - 1 ? "Run ML analysis ✨" : "Next →"}
-        </button>
+        <motion.button onClick={handleNext}
+          whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+          style={{ flex: 1 }}>
+          {current === QUESTIONS.length - 1 ? "Run AI analysis ✨" : "Next →"}
+        </motion.button>
       </div>
     </div>
   );
