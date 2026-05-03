@@ -153,6 +153,7 @@ function Predict() {
         risk: data.risk,
         confidence: data.confidence,
         features: mapped,
+        prediction_id: data.prediction_id ?? null,
       }));
 
       setMlResult({
@@ -390,6 +391,21 @@ function Predict() {
     const savedAnswers  = answers.length ? answers : JSON.parse(localStorage.getItem("burnoutAnswers") || "[]");
     const insights = getPersonalisedInsights(savedAnswers, savedFeatures);
 
+    const sendFeedback = async (accurate) => {
+      try {
+        const last = JSON.parse(localStorage.getItem("lastPrediction") || "{}");
+        const token = localStorage.getItem("token");
+        const headers = token ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
+        await axios.post(`${API_BASE}/feedback`, {
+          prediction_id: last.prediction_id ?? null,
+          accurate: accurate ? 1 : 0,
+        }, { headers });
+        toast.success(accurate ? "Thanks!" : "Got it", "Feedback helps the model improve");
+      } catch {
+        toast.info("Couldn't send feedback", "Try again later");
+      }
+    };
+
     const handleShare = async () => {
       const text = `I just checked my burnout risk with BurnoutAI 🔥\nResult: ${result}\nTake the free 2-min assessment: ${window.location.origin}`;
       if (navigator.share) {
@@ -537,6 +553,20 @@ function Predict() {
                 </div>
               </motion.div>
             )}
+
+            {/* Feedback */}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.7, duration: 0.3 }}
+              style={{ marginTop: 20, padding: "14px 18px", background: "var(--surface)", borderRadius: "var(--r-md)", border: "1px solid var(--border)", textAlign: "center" }}>
+              <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 10, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                Was this prediction accurate?
+              </div>
+              <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+                <button className="btn-ghost" onClick={() => sendFeedback(true)}  style={{ width: "auto", padding: "8px 20px", fontSize: 14 }}>👍 Yes</button>
+                <button className="btn-ghost" onClick={() => sendFeedback(false)} style={{ width: "auto", padding: "8px 20px", fontSize: 14 }}>👎 Off</button>
+              </div>
+            </motion.div>
 
             {/* Feature chips */}
             {savedFeatures.study_hours_per_day && (

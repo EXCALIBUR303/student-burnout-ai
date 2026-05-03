@@ -7,6 +7,7 @@ import bcrypt
 import jwt
 import os
 from datetime import datetime, timedelta, timezone
+from feedback import init_schema as _init_feedback, record_feedback, get_stats as _feedback_stats
 
 # ── Gemini AI via REST API (no extra packages — uses stdlib urllib) ────────────
 import json
@@ -206,6 +207,9 @@ try:
     print("[OK] Added user_id column to predictions")
 except Exception:
     pass  # Column already exists
+
+_init_feedback(conn)
+print("[OK] Feedback table ready")
 
 
 # ===== CHATBOT =====
@@ -685,6 +689,20 @@ def predict(data: dict, request: Request):
             (study, sleep, social, physical, result_label, user_id),
         )
         conn.commit()
+        pred_id = cursor.lastrowid
+
+        # SHAP per-prediction explanation (best-effort — won't crash /predict if unavailable)
+        shap_explanation = None
+        try:
+            from explain import explain_prediction
+            shap_explanation = explain_prediction({
+                "study_hours_per_day": study, "sleep_hours_per_day": sleep,
+                "social_hours_per_day": social, "physical_activity_hours_per_day": physical,
+                "gpa_norm": gpa_norm, "screen_time_hours": screen,
+                "extracurricular_hours": extra,
+            })
+        except Exception as _shap_err:
+            print(f"[shap] skipped: {_shap_err}")
 
         return {
             "prediction":    result_label,
@@ -692,6 +710,8 @@ def predict(data: dict, request: Request):
             "confidence":    confidence,
             "probabilities": probabilities,
             "top_drivers":   top_drivers,
+            "prediction_id": pred_id,
+            "explanation":   shap_explanation,
         }
 
     except Exception as e:
@@ -767,3 +787,20 @@ def chat(data: dict):
     return {"reply": offline_chat(message)}
 
 
+@app.post("/feedback")
+def submit_feedback(data: dict, request: Request):
+    user = get_user_from_request(request)
+    record_feedback(
+        conn,
+        prediction_id=data.get("prediction_id"),
+        user_id=user["sub"] if user else None,
+        accurate=int(data.get("accurate", 1)),
+        actual_label=data.get("actual_label"),
+        notes=data.get("notes"),
+    )
+    return {"ok": True}
+
+
+@app.get("/feedback/stats")
+def feedback_stats():
+    return _feedback_stats(conn)
