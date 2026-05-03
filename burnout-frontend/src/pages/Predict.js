@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
+import html2canvas from "html2canvas";
 import axios from "axios";
 import confetti from "canvas-confetti";
 import "../App.css";
@@ -20,14 +21,18 @@ const QUESTIONS = [
   { q: "How socially active are you?",               type: "Social",       icon: "👥", tip: "Isolation increases vulnerability to burnout." },
   { q: "How good is your concentration?",            type: "Productivity", icon: "🎯", tip: "Dropping focus often precedes exhaustion." },
   { q: "How often do you procrastinate?",            type: "Productivity", icon: "⏳", tip: "Procrastination spirals into avoidance stress." },
+  { q: "What is your current GPA (out of 10)?",      type: "Academic",     icon: "🏅", tip: "Academic performance patterns correlate with stress levels." },
 ];
 
-// Map 0-10 slider answers to the 4 API features
+// Map 0-10 slider answers to all 7 base API features (model v2)
 const mapToApiFeatures = (answers) => ({
-  study_hours_per_day:             parseFloat((answers[0] * 1.2).toFixed(1)),
-  sleep_hours_per_day:             parseFloat((4 + answers[1] * 0.8).toFixed(1)),
-  physical_activity_hours_per_day: parseFloat((answers[6] * 0.4).toFixed(1)),
-  social_hours_per_day:            parseFloat((answers[7] * 0.6).toFixed(1)),
+  study_hours_per_day:             parseFloat((answers[0] * 1.2).toFixed(1)),      // Q0: 0-12h
+  sleep_hours_per_day:             parseFloat((4 + answers[1] * 0.8).toFixed(1)),  // Q1: 4-12h
+  physical_activity_hours_per_day: parseFloat((answers[6] * 0.4).toFixed(1)),      // Q6: 0-4h
+  social_hours_per_day:            parseFloat((answers[7] * 0.6).toFixed(1)),      // Q7: 0-6h
+  screen_time_hours:               parseFloat((answers[4] * 1.6).toFixed(1)),      // Q4: 0-16h
+  gpa_norm:                        parseFloat(((answers[10] ?? 7) / 10.0).toFixed(2)), // Q10: GPA/10
+  extracurricular_hours:           1.0,                                             // sensible default
 });
 
 const calculateLocalScore = (data) => {
@@ -47,8 +52,14 @@ const calculateLocalScore = (data) => {
 
 const getPersonalisedInsights = (answers, features) => {
   const insights = [];
-  const { study_hours_per_day: study, sleep_hours_per_day: sleep,
-          physical_activity_hours_per_day: physical, social_hours_per_day: social } = features;
+  const {
+    study_hours_per_day: study,
+    sleep_hours_per_day: sleep,
+    physical_activity_hours_per_day: physical,
+    social_hours_per_day: social,
+    screen_time_hours: screenTime,
+    gpa_norm: gpaNorm,
+  } = features;
 
   if (study > 8)
     insights.push({ icon: "📚", title: "Study overload", desc: `~${study}h/day is above the safe zone. Try 45-min blocks with 15-min breaks.` });
@@ -72,8 +83,11 @@ const getPersonalisedInsights = (answers, features) => {
   if (answers[9] > 7)
     insights.push({ icon: "⏳", title: "Procrastination spike", desc: "High procrastination → avoidance stress spiral. Break tasks into 10-min chunks." });
 
-  if (answers[4] > 7)
+  if ((screenTime ?? answers[4] * 1.6) > 6)
     insights.push({ icon: "📱", title: "Screen overload", desc: "High screen time disrupts melatonin and sleep quality. Set a screen curfew at 10 pm." });
+
+  if (gpaNorm !== undefined && gpaNorm < 0.5)
+    insights.push({ icon: "🏅", title: "GPA pressure", desc: "Lower GPA creates stress spirals. Talk to an academic advisor — small adjustments early make a big difference." });
 
   // Always have at least 3 insights
   const defaults = [
@@ -98,6 +112,8 @@ function Predict() {
   const [features, setFeatures] = useState(null);
   const [loading, setLoading]   = useState(false);
   const [mlInsights, setMlInsights] = useState(null);
+
+  const shareCardRef = useRef();
 
   const liveScore  = useMemo(() => calculateLocalScore([...answers, value]), [answers, value]);
   const liveStatus = liveScore >= 12
@@ -130,6 +146,14 @@ function Predict() {
       const label = data.prediction === "High" ? "High Burnout"
                   : data.prediction === "Medium" ? "Medium Burnout"
                   : "Low Burnout";
+
+      // Save full prediction snapshot for chat context
+      localStorage.setItem("lastPrediction", JSON.stringify({
+        prediction: data.prediction,
+        risk: data.risk,
+        confidence: data.confidence,
+        features: mapped,
+      }));
 
       setMlResult({
         label:       data.prediction,
@@ -376,6 +400,37 @@ function Predict() {
       }
     };
 
+    const shareResult = async () => {
+      if (!shareCardRef.current) return;
+      try {
+        const canvas = await html2canvas(shareCardRef.current, {
+          backgroundColor: null,
+          scale: 2,
+        });
+        const url = canvas.toDataURL("image/png");
+
+        if (navigator.share && navigator.canShare) {
+          const blob = await (await fetch(url)).blob();
+          const file = new File([blob], "burnout-result.png", { type: "image/png" });
+          try {
+            await navigator.share({
+              files: [file],
+              title: "My Burnout Assessment",
+              text: "Check out my burnout risk score from Burnout/AI",
+            });
+            return;
+          } catch {}
+        }
+        // Fallback: download the image
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "burnout-result.png";
+        a.click();
+      } catch (err) {
+        toast.info("Share unavailable", "Could not generate image card");
+      }
+    };
+
     return (
       <div className="dashboard-container">
         <motion.div
@@ -487,10 +542,12 @@ function Predict() {
             {savedFeatures.study_hours_per_day && (
               <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", fontSize: 13 }}>
                 {[
-                  { icon: "📚", label: "Study",    val: `${savedFeatures.study_hours_per_day}h` },
-                  { icon: "😴", label: "Sleep",    val: `${savedFeatures.sleep_hours_per_day}h` },
-                  { icon: "🏃", label: "Activity", val: `${savedFeatures.physical_activity_hours_per_day}h` },
-                  { icon: "👥", label: "Social",   val: `${savedFeatures.social_hours_per_day}h` },
+                  { icon: "📚", label: "Study",   val: `${savedFeatures.study_hours_per_day}h` },
+                  { icon: "😴", label: "Sleep",   val: `${savedFeatures.sleep_hours_per_day}h` },
+                  { icon: "🏃", label: "Activity",val: `${savedFeatures.physical_activity_hours_per_day}h` },
+                  { icon: "👥", label: "Social",  val: `${savedFeatures.social_hours_per_day}h` },
+                  ...(savedFeatures.screen_time_hours != null ? [{ icon: "📱", label: "Screen", val: `${savedFeatures.screen_time_hours}h` }] : []),
+                  ...(savedFeatures.gpa_norm != null ? [{ icon: "🏅", label: "GPA", val: (savedFeatures.gpa_norm * 10).toFixed(1) }] : []),
                 ].map((f) => (
                   <motion.div key={f.label}
                     initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -534,6 +591,20 @@ function Predict() {
             </button>
             <motion.button
               whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+              onClick={shareResult}
+              style={{
+                display: "flex", alignItems: "center", gap: 8,
+                padding: "10px 22px", borderRadius: "var(--r-md)",
+                border: "1px solid var(--border-strong)",
+                background: "var(--surface)", color: "var(--text)",
+                fontSize: 13, fontWeight: 700, cursor: "pointer",
+                marginTop: 12,
+              }}
+            >
+              🖼️ Share Result Card
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
               onClick={downloadPDF}
               style={{
                 display: "flex", alignItems: "center", gap: 8,
@@ -551,6 +622,61 @@ function Predict() {
             </button>
           </div>
         </motion.div>
+
+        {/* ── Hidden shareable result card (off-screen, captured by html2canvas) ── */}
+        <div
+          ref={shareCardRef}
+          style={{
+            position: "fixed",
+            left: "-9999px",
+            top: 0,
+            width: 400,
+            height: 300,
+            background: "linear-gradient(135deg, #1a1035, #0f1a2e)",
+            borderRadius: 20,
+            padding: "32px 36px",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "space-between",
+            fontFamily: "'Inter', 'Segoe UI', sans-serif",
+            boxSizing: "border-box",
+            overflow: "hidden",
+          }}
+        >
+          {/* App logo */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 22 }}>🧠</span>
+            <span style={{ fontSize: 18, fontWeight: 800, color: "#7c5cff", letterSpacing: "-0.02em" }}>
+              Burnout<span style={{ color: "#00d4ff" }}>/AI</span>
+            </span>
+          </div>
+
+          {/* Risk emoji + level */}
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 52, lineHeight: 1, marginBottom: 8 }}>
+              {variant === "danger" ? "🔴" : variant === "warning" ? "🟡" : "🟢"}
+            </div>
+            <div style={{ fontSize: 28, fontWeight: 800, color: riskColor, marginBottom: 4, letterSpacing: "-0.02em" }}>
+              {mlResult?.label || result?.replace(" Burnout", "") || "—"} Risk
+            </div>
+            {mlResult?.confidence && (
+              <div style={{ fontSize: 14, color: "rgba(255,255,255,0.55)", fontWeight: 500 }}>
+                {mlResult.confidence}% confidence
+              </div>
+            )}
+          </div>
+
+          {/* Subtitle + date */}
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginBottom: 4 }}>
+              Assessed at Woxsen University
+            </div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", fontWeight: 500 }}>
+              {new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
+            </div>
+          </div>
+        </div>
       </div>
     );
   }

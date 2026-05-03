@@ -10,6 +10,7 @@ import {
   PieChart, Pie, Cell,
   ScatterChart, Scatter,
   LineChart, Line,
+  ReferenceLine,
   ResponsiveContainer,
 } from "recharts";
 import Badge from "../components/Badge";
@@ -929,6 +930,80 @@ export default function Dashboard() {
                     </ResponsiveContainer>
                   </motion.div>
                 </div>
+
+                {/* ── Burnout Trend Line Chart ── */}
+                {history.length >= 2 && (() => {
+                  const RISK_LEVEL = { Low: 1, Medium: 2, Moderate: 2, High: 3 };
+                  const LEVEL_NAME = { 1: "Low", 2: "Med", 3: "High" };
+                  const DOT_COLOR  = { 1: "#22c55e", 2: "#f59e0b", 3: "#ef4444" };
+                  const trendData = [...history].reverse().map((item) => {
+                    const riskVal = item.risk != null
+                      ? item.risk + 1
+                      : RISK_LEVEL[item.result] ?? 2;
+                    const rawDate = item.created_at ? item.created_at.slice(0, 10) : "";
+                    let dateLabel = rawDate;
+                    if (rawDate) {
+                      const d = new Date(rawDate);
+                      if (!isNaN(d)) {
+                        dateLabel = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                      }
+                    }
+                    return { date: dateLabel, risk: riskVal };
+                  });
+
+                  const CustomDot = (props) => {
+                    const { cx, cy, payload } = props;
+                    return (
+                      <circle
+                        cx={cx} cy={cy} r={5}
+                        fill={DOT_COLOR[payload.risk] || "#7c5cff"}
+                        stroke="#1a1035" strokeWidth={2}
+                      />
+                    );
+                  };
+
+                  return (
+                    <motion.div
+                      className="chart-card"
+                      style={{ marginBottom: 20 }}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                    >
+                      <h3 className="chart-title">📈 Your Burnout Trend</h3>
+                      <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 12 }}>
+                        Risk score over your last {history.length} assessments
+                      </p>
+                      <ResponsiveContainer width="100%" height={180}>
+                        <LineChart data={trendData} margin={{ top: 8, right: 16, left: -10, bottom: 4 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                          <XAxis dataKey="date" tick={{ fill: AXIS, fontSize: 11 }} tickLine={false} />
+                          <YAxis
+                            domain={[0.5, 3.5]}
+                            ticks={[1, 2, 3]}
+                            tickFormatter={(v) => LEVEL_NAME[v] || v}
+                            tick={{ fill: AXIS, fontSize: 11 }}
+                            tickLine={false}
+                          />
+                          <Tooltip
+                            contentStyle={TT}
+                            formatter={(v) => [LEVEL_NAME[v] || v, "Risk Level"]}
+                            labelFormatter={(label) => `Date: ${label}`}
+                          />
+                          <ReferenceLine y={1} stroke="#22c55e" strokeDasharray="4 3" strokeOpacity={0.6} />
+                          <ReferenceLine y={3} stroke="#ef4444" strokeDasharray="4 3" strokeOpacity={0.6} />
+                          <Line
+                            type="monotone"
+                            dataKey="risk"
+                            stroke="#7c5cff"
+                            strokeWidth={2.5}
+                            dot={<CustomDot />}
+                            activeDot={{ r: 7 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </motion.div>
+                  );
+                })()}
 
                 {/* Recent predictions list */}
                 <div className="chart-card">

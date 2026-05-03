@@ -13,6 +13,7 @@ import OnboardingModal from "./components/OnboardingModal";
 import Background from "./components/Background";
 import ChatBot from "./components/ChatBot";
 import Toaster from "./components/Toaster";
+import BottomNav from "./components/BottomNav";
 
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -102,6 +103,34 @@ function App() {
   const [showOnboarding, setShowOnboarding] = useState(() => {
     return !localStorage.getItem("onboardingDone") && !localStorage.getItem("token");
   });
+  const [chatOpen, setChatOpen] = useState(false);
+
+  // Build userContext from stored prediction data
+  const buildUserContext = () => {
+    try {
+      const raw = localStorage.getItem("lastPrediction");
+      if (raw) {
+        const p = JSON.parse(raw);
+        const f = p.features || p;  // new format has nested features; old has flat
+        const risk  = p.prediction || p.result || "";
+        const study  = f.study_hours_per_day  ?? p.study ?? null;
+        const sleep  = f.sleep_hours_per_day  ?? p.sleep ?? null;
+        const screen = f.screen_time_hours    ?? null;
+        const gpa    = f.gpa_norm != null ? (f.gpa_norm * 10).toFixed(1) : null;
+        let ctx = risk ? `${risk} burnout risk.` : "";
+        if (study  !== null) ctx += ` Studies ${study}h/day.`;
+        if (sleep  !== null) ctx += ` Sleeps ${sleep}h/day.`;
+        if (screen !== null) ctx += ` Screen time ${screen}h/day.`;
+        if (gpa    !== null) ctx += ` GPA ${gpa}/10.`;
+        if (p.confidence) ctx += ` (${p.confidence}% confidence)`;
+        return ctx.trim();
+      }
+      // Fallback: burnoutResult in localStorage
+      const burnoutResult = localStorage.getItem("burnoutResult");
+      if (burnoutResult) return `${burnoutResult} risk.`;
+    } catch {}
+    return "";
+  };
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -135,7 +164,14 @@ function App() {
           <div style={{ position: "relative", zIndex: 1, minHeight: "100vh" }}>
             <Navbar isLoggedIn={isLoggedIn} setIsLoggedIn={setIsLoggedIn} />
             <AppRoutes isLoggedIn={isLoggedIn} setIsLoggedIn={setIsLoggedIn} />
-            {isLoggedIn && <ChatBot />}
+            {isLoggedIn && (
+              <ChatBot
+                userContext={buildUserContext()}
+                forceOpen={chatOpen || undefined}
+                onClose={() => setChatOpen(false)}
+              />
+            )}
+            <BottomNav onChatOpen={() => setChatOpen(true)} />
           </div>
           {showOnboarding && <OnboardingModal onClose={() => setShowOnboarding(false)} />}
         </Router>

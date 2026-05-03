@@ -136,7 +136,7 @@ const getStarters = (burnoutResult) => {
 
 const QUICK_REPLIES = ["Tell me more", "What should I try tonight?", "Why does this happen?", "How long will it take?"];
 
-export default function ChatBot() {
+export default function ChatBot({ userContext = "", onClose, forceOpen }) {
   const burnoutResult = localStorage.getItem("burnoutResult") || null;
   const starters      = getStarters(burnoutResult);
 
@@ -150,6 +150,11 @@ export default function ChatBot() {
   const [lastTopic, setLastTopic] = useState("general");
   const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth <= 640);
   const [messages, setMessages] = useState([{ sender: "bot", text: greeting, time: nowTime() }]);
+
+  // Support external open/close control (e.g. from BottomNav)
+  useEffect(() => {
+    if (forceOpen !== undefined) setOpen(forceOpen);
+  }, [forceOpen]);
 
   const messagesEndRef = useRef(null);
   const inputRef       = useRef(null);
@@ -186,12 +191,21 @@ export default function ChatBot() {
     const topic = detectTopic(userText);
     setLastTopic(topic);
 
-    const contextualMsg = burnoutResult
-      ? `[User burnout level: ${burnoutResult}] ${userText}`
-      : userText;
+    // Build context string from prop or localStorage burnout result
+    const contextStr = userContext || (burnoutResult ? `${burnoutResult} risk.` : "");
+
+    // Build history from current messages (before adding the new user message)
+    const historyForBackend = messages.slice(-6).map((m) => ({
+      role: m.sender === "user" ? "user" : "assistant",
+      text: m.text,
+    }));
 
     try {
-      const { data } = await axios.post("/chat", { message: contextualMsg });
+      const { data } = await axios.post("/chat", {
+        message: userText,
+        history: historyForBackend,
+        user_context: contextStr,
+      });
       const reply = (data.reply && data.reply.length > 20) ? data.reply : localReply(userText);
       setTimeout(() => addBotMessage(reply), 600 + Math.random() * 400);
     } catch {
@@ -250,7 +264,7 @@ export default function ChatBot() {
                       {burnoutResult}
                     </span>
                   )}
-                  <button onClick={() => setOpen(false)} style={styles.closeBtn} aria-label="Close">✕</button>
+                  <button onClick={() => { setOpen(false); onClose && onClose(); }} style={styles.closeBtn} aria-label="Close">✕</button>
                 </div>
               </div>
 
