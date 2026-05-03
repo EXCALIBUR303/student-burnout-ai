@@ -16,21 +16,21 @@
     "productive_vs_leisure",
     "hourly_load"
   ],
-  "honesty_holdout_accuracy": 0.5205,
-  "honesty_holdout_logloss": 3.1688,
-  "n_train": 32423,
+  "honesty_holdout_accuracy": 0.6235,
+  "honesty_holdout_logloss": 1.031,
+  "n_train": 37423,
   "n_test": 2000,
   "best_xgb_params": {
-    "n_estimators": 600,
-    "max_depth": 3,
-    "learning_rate": 0.02801497339765478,
-    "subsample": 0.7078608441996485,
-    "colsample_bytree": 0.9242787836210083,
-    "min_child_weight": 10,
-    "reg_alpha": 0.40584204049322115,
-    "reg_lambda": 0.897320090445014
+    "n_estimators": 800,
+    "max_depth": 4,
+    "learning_rate": 0.019383061915524993,
+    "subsample": 0.6315865219372829,
+    "colsample_bytree": 0.6047448873076304,
+    "min_child_weight": 9,
+    "reg_alpha": 0.8919466967452931,
+    "reg_lambda": 2.485512989232785
   },
-  "best_xgb_cv_accuracy": 0.6451,
+  "best_xgb_cv_accuracy": 0.6477,
   "ensemble": "Stacking[XGB+LGBM]+LogReg, isotonic-calibrated",
   "optuna_trials": 60
 }

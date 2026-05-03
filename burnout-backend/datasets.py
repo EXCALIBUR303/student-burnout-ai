@@ -295,6 +295,31 @@ def load_stress_survey(path: str = "Stress_Dataset.csv") -> pd.DataFrame | None:
     return out.dropna(subset=["target_continuous"])[UNIFIED_COLUMNS]
 
 
+def load_synthetic(path: str = "synthetic_burnout_5k.csv") -> pd.DataFrame | None:
+    """
+    5000 research-grounded synthetic samples from synthetic_burnout.py.
+    Uses Maslach Burnout Inventory + Salmela-Aro patterns (sleep deficit ↔ exhaustion,
+    study × low recovery ↔ cynicism). Class balance ~25/50/25.
+    """
+    df = _safe_csv(path)
+    if df is None:
+        return None
+    cls_map = {"Low": 0.15, "Moderate": 0.5, "Medium": 0.5, "High": 0.85}
+    out = pd.DataFrame({
+        "study_hours_per_day":             pd.to_numeric(df["Study_Hours_Per_Day"], errors="coerce"),
+        "sleep_hours_per_day":             pd.to_numeric(df["Sleep_Hours_Per_Day"], errors="coerce"),
+        "social_hours_per_day":            pd.to_numeric(df["Social_Hours_Per_Day"], errors="coerce"),
+        "physical_activity_hours_per_day": pd.to_numeric(df["Physical_Activity_Hours_Per_Day"], errors="coerce"),
+        "gpa_norm":                        pd.to_numeric(df["GPA"], errors="coerce") / 10.0,
+        "screen_time_hours":               pd.to_numeric(df["Screen_Time_Hours_Per_Day"], errors="coerce"),
+        "extracurricular_hours":           pd.to_numeric(df["Extracurricular_Hours_Per_Day"], errors="coerce"),
+        "target_continuous":               df["Stress_Level"].map(cls_map),
+    })
+    out["target_class"] = out["target_continuous"].apply(lambda c: _to_class(c) if pd.notna(c) else np.nan)
+    out["source"] = "synthetic"
+    return out.dropna(subset=["target_continuous"])[UNIFIED_COLUMNS]
+
+
 # ---------------------------------------------------------------------------
 # Combined loader
 # ---------------------------------------------------------------------------
@@ -311,6 +336,7 @@ def load_all() -> pd.DataFrame:
         load_mental_health2,
         load_sleep_patterns,
         load_stress_survey,
+        load_synthetic,
     ]
     frames = [fn() for fn in loaders]
     frames = [f for f in frames if f is not None and len(f) > 0]

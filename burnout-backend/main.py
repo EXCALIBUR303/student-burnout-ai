@@ -136,9 +136,11 @@ app.add_middleware(
 
 # ===== MODEL =====
 import numpy as np  # needed for feature importance averaging across calibration folds
+_V4_PKL = "stress_model_v4.pkl"
 _V3_PKL = "stress_model_v3.pkl"
 _V2_PKL = "stress_model.pkl"
-_active_pkl = _V3_PKL if os.path.exists(_V3_PKL) else _V2_PKL
+# Prefer v4 (Optuna+stacking, +8pp over v3) → fall back to v3 → v2
+_active_pkl = _V4_PKL if os.path.exists(_V4_PKL) else (_V3_PKL if os.path.exists(_V3_PKL) else _V2_PKL)
 model = joblib.load(_active_pkl)
 print(f"[model] loaded {_active_pkl}")
 labels = {0: "Low", 1: "Medium", 2: "High"}
@@ -273,12 +275,41 @@ def offline_chat(message: str) -> str:
 _feature_importance_cache: list | None = None
 
 def _get_feature_importances(m) -> list:
-    """Extract feature importances from either a plain XGBoost or CalibratedClassifierCV."""
+    """Extract feature importances from XGBoost / CalibratedClassifierCV / StackingClassifier."""
+    # Plain XGBoost / LightGBM / RandomForest
     if hasattr(m, "feature_importances_"):
         return list(m.feature_importances_)
+
+    # CalibratedClassifierCV — average across folds
     if hasattr(m, "calibrated_classifiers_"):
-        folds = [c.estimator.feature_importances_ for c in m.calibrated_classifiers_]
-        return list(np.mean(folds, axis=0))
+        all_folds = []
+        for c in m.calibrated_classifiers_:
+            est = getattr(c, "estimator", None)
+            if est is None:
+                continue
+            # If the wrapped estimator is a StackingClassifier (v4)
+            if hasattr(est, "estimators_"):
+                # Average importances across all base learners that have them
+                base_imps = []
+                for base in est.estimators_:
+                    if hasattr(base, "feature_importances_"):
+                        base_imps.append(np.asarray(base.feature_importances_, dtype=float))
+                if base_imps:
+                    all_folds.append(np.mean(base_imps, axis=0))
+            elif hasattr(est, "feature_importances_"):
+                all_folds.append(np.asarray(est.feature_importances_, dtype=float))
+        if all_folds:
+            return list(np.mean(all_folds, axis=0))
+
+    # Plain StackingClassifier (no calibration wrapper)
+    if hasattr(m, "estimators_"):
+        base_imps = []
+        for base in m.estimators_:
+            if hasattr(base, "feature_importances_"):
+                base_imps.append(np.asarray(base.feature_importances_, dtype=float))
+        if base_imps:
+            return list(np.mean(base_imps, axis=0))
+
     return [1.0 / len(FEATURE_NAMES)] * len(FEATURE_NAMES)
 
 
