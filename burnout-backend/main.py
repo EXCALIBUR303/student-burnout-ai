@@ -81,6 +81,41 @@ def gemini_chat(message: str) -> str | None:
 
     return None
 
+
+def gemini_chat_with_context(full_prompt: str) -> str | None:
+    """Call Gemini REST API with a pre-built prompt (supports history + user context)."""
+    global _last_gemini_error, _working_model
+    if not GEMINI_API_KEY:
+        return None
+
+    payload = json.dumps({
+        "contents": [{"role": "user", "parts": [{"text": full_prompt}]}],
+        "generationConfig": {
+            "maxOutputTokens": 512,
+            "temperature": 0.75,
+            "thinkingConfig": {"thinkingBudget": 0},
+        },
+    }).encode()
+
+    models_to_try = [_working_model] if _working_model else GEMINI_MODELS
+
+    for model in models_to_try:
+        try:
+            reply = _try_model(model, payload)
+            _working_model = model
+            _last_gemini_error = f"OK via {model}"
+            print(f"✅ Gemini reply via {model}")
+            return reply
+        except urllib.error.HTTPError as e:
+            body = e.read().decode()
+            _last_gemini_error = f"{model} HTTP {e.code}: {body[:200]}"
+            print(f"⚠️ {model} failed: HTTP {e.code}")
+        except Exception as e:
+            _last_gemini_error = f"{model} {type(e).__name__}: {e}"
+            print(f"⚠️ {model} failed: {e}")
+
+    return None
+
 if GEMINI_API_KEY:
     print(f"✅ Gemini REST chatbot enabled (key length: {len(GEMINI_API_KEY)})")
 
@@ -102,10 +137,21 @@ app.add_middleware(
 model = joblib.load("stress_model.pkl")
 labels = {0: "Low", 1: "Medium", 2: "High"}
 
+# v2 model — 14 features (7 base + 7 engineered)
 FEATURE_NAMES = [
     "study_hours_per_day", "sleep_hours_per_day", "social_hours_per_day",
-    "physical_activity_hours_per_day", "study_sleep_ratio",
-    "active_hours", "rest_ratio", "productive_vs_leisure",
+    "physical_activity_hours_per_day",
+    "gpa_norm",               # GPA normalised 0-1
+    "screen_time_hours",      # daily screen/social-media hours
+    "extracurricular_hours",  # clubs/activities hours per day
+    # --- engineered ---
+    "study_sleep_ratio",      # study / (sleep + 0.1)
+    "sleep_deficit",          # max(0, 7.5 - sleep)
+    "burnout_index",          # study_sleep_ratio * sleep_deficit
+    "active_hours",           # study + physical
+    "rest_ratio",             # (sleep + physical) / total
+    "productive_vs_leisure",  # study / (social + physical + 0.1)
+    "hourly_load",            # (study + social + physical + screen) / 16
 ]
 
 FEATURE_META = {
@@ -113,10 +159,16 @@ FEATURE_META = {
     "sleep_hours_per_day":             {"label": "Sleep hours",        "emoji": "😴", "avg": 7.5,  "high_is_risk": False},
     "social_hours_per_day":            {"label": "Social time",        "emoji": "👥", "avg": 2.0,  "high_is_risk": False},
     "physical_activity_hours_per_day": {"label": "Physical activity",  "emoji": "🏃", "avg": 1.2,  "high_is_risk": False},
+    "gpa_norm":                        {"label": "GPA",                "emoji": "🎓", "avg": 0.7,  "high_is_risk": False},
+    "screen_time_hours":               {"label": "Screen time",        "emoji": "📱", "avg": 2.0,  "high_is_risk": True},
+    "extracurricular_hours":           {"label": "Extracurricular",    "emoji": "🎭", "avg": 1.5,  "high_is_risk": False},
     "study_sleep_ratio":               {"label": "Study/sleep ratio",  "emoji": "⚖️", "avg": 0.9,  "high_is_risk": True},
+    "sleep_deficit":                   {"label": "Sleep deficit",      "emoji": "🌙", "avg": 0.5,  "high_is_risk": True},
+    "burnout_index":                   {"label": "Burnout index",      "emoji": "🔥", "avg": 0.5,  "high_is_risk": True},
     "active_hours":                    {"label": "Active hours",       "emoji": "⚡", "avg": 7.7,  "high_is_risk": False},
-    "rest_ratio":                      {"label": "Rest ratio",         "emoji": "🌙", "avg": 0.7,  "high_is_risk": False},
+    "rest_ratio":                      {"label": "Rest ratio",         "emoji": "💤", "avg": 0.7,  "high_is_risk": False},
     "productive_vs_leisure":           {"label": "Productivity ratio", "emoji": "🎯", "avg": 2.0,  "high_is_risk": True},
+    "hourly_load":                     {"label": "Hourly load",        "emoji": "⏰", "avg": 0.6,  "high_is_risk": True},
 }
 
 # ===== DATABASE =====
@@ -542,25 +594,54 @@ def get_prediction_history(request: Request):
 @app.post("/predict")
 def predict(data: dict, request: Request):
     try:
+        # ── Base features (7) ─────────────────────────────────────────
         study    = float(data.get("study_hours_per_day", 0))
         sleep    = float(data.get("sleep_hours_per_day", 0))
         social   = float(data.get("social_hours_per_day", 0))
         physical = float(data.get("physical_activity_hours_per_day", 0))
+        gpa_norm = float(data.get("gpa_norm", 0.70))          # normalised 0-1
+        screen   = float(data.get("screen_time_hours", 2.0))  # daily screen hours
+        extra    = float(data.get("extracurricular_hours", 1.0))
 
-        total = study + sleep + social + physical or 1.0
+        # ── Clip to training bounds (mirrors trainer.py CLIP) ─────────
+        study    = min(max(study,    0), 18)
+        sleep    = min(max(sleep,    2), 14)
+        social   = min(max(social,   0), 12)
+        physical = min(max(physical, 0),  8)
+        gpa_norm = min(max(gpa_norm, 0),  1)
+        screen   = min(max(screen,   0), 16)
+        extra    = min(max(extra,    0),  8)
+
+        total = (study + sleep + social + physical) or 1.0
+
+        # ── Engineered features (7) ───────────────────────────────────
+        study_sleep_ratio     = study / (sleep + 0.1)
+        sleep_deficit         = max(0.0, 7.5 - sleep)
+        burnout_index         = study_sleep_ratio * sleep_deficit
+        active_hours          = study + physical
+        rest_ratio            = (sleep + physical) / total
+        productive_vs_leisure = study / (social + physical + 0.1)
+        hourly_load           = (study + social + physical + screen) / 16.0
 
         feature_vals = {
-            "study_hours_per_day":              study,
-            "sleep_hours_per_day":              sleep,
-            "social_hours_per_day":             social,
-            "physical_activity_hours_per_day":  physical,
-            "study_sleep_ratio":                study / (sleep + 0.1),
-            "active_hours":                     study + physical,
-            "rest_ratio":                       (sleep + physical) / total,
-            "productive_vs_leisure":            study / (social + physical + 0.1),
+            "study_hours_per_day":             study,
+            "sleep_hours_per_day":             sleep,
+            "social_hours_per_day":            social,
+            "physical_activity_hours_per_day": physical,
+            "gpa_norm":                        gpa_norm,
+            "screen_time_hours":               screen,
+            "extracurricular_hours":           extra,
+            "study_sleep_ratio":               study_sleep_ratio,
+            "sleep_deficit":                   sleep_deficit,
+            "burnout_index":                   burnout_index,
+            "active_hours":                    active_hours,
+            "rest_ratio":                      rest_ratio,
+            "productive_vs_leisure":           productive_vs_leisure,
+            "hourly_load":                     hourly_load,
         }
 
-        df = pd.DataFrame([feature_vals])
+        # Build DataFrame in exact feature order the model was trained on
+        df = pd.DataFrame([feature_vals])[FEATURE_NAMES]
 
         prediction   = model.predict(df)[0]
         result_label = labels.get(int(prediction), "Unknown")
@@ -659,11 +740,28 @@ def generate_plan(data: dict):
 @app.post("/chat")
 def chat(data: dict):
     message = data.get("message", "").strip()
+    history = data.get("history", [])       # list of {role, text} dicts
+    user_context = data.get("user_context", "")  # e.g. "High Burnout, studies 9h/day"
     if not message:
         return {"reply": "I'm here — what's on your mind?"}
 
-    # Try Gemini first, fall back to keyword responses
-    reply = gemini_chat(message)
+    # Build conversation prompt with context
+    context_prefix = ""
+    if user_context:
+        context_prefix = f"User context: {user_context}\n\n"
+
+    # Build history string (last 6 turns max)
+    history_str = ""
+    for turn in history[-6:]:
+        role = "User" if turn.get("role") == "user" else "Assistant"
+        history_str += f"{role}: {turn.get('text', '')}\n"
+
+    if history_str:
+        full_prompt = f"{GEMINI_SYSTEM}\n\n{context_prefix}Conversation so far:\n{history_str}\nUser: {message}\nAssistant:"
+    else:
+        full_prompt = f"{GEMINI_SYSTEM}\n\n{context_prefix}User: {message}\nAssistant:"
+
+    reply = gemini_chat_with_context(full_prompt)
     if reply:
         return {"reply": reply}
     return {"reply": offline_chat(message)}
