@@ -141,10 +141,22 @@ import numpy as np  # needed for feature importance averaging across calibration
 _V4_PKL = "stress_model_v4.pkl"
 _V3_PKL = "stress_model_v3.pkl"
 _V2_PKL = "stress_model.pkl"
-# Prefer v4 (Optuna+stacking, +8pp over v3) → fall back to v3 → v2
-_active_pkl = _V4_PKL if os.path.exists(_V4_PKL) else (_V3_PKL if os.path.exists(_V3_PKL) else _V2_PKL)
-model = joblib.load(_active_pkl)
-print(f"[model] loaded {_active_pkl}")
+
+model = None
+_active_pkl = "none"
+for _pkl in [_V4_PKL, _V3_PKL, _V2_PKL]:
+    if os.path.exists(_pkl):
+        try:
+            model = joblib.load(_pkl)
+            _active_pkl = _pkl
+            print(f"[model] loaded {_pkl} ✅")
+            break
+        except Exception as _e:
+            print(f"[model] failed to load {_pkl}: {_e}")
+
+if model is None:
+    print("[model] ⚠️  No model loaded — /predict will return error. Check pkl files.")
+
 labels = {0: "Low", 1: "Medium", 2: "High"}
 
 # v2 model — 14 features (7 base + 7 engineered)
@@ -656,6 +668,8 @@ def get_prediction_history(request: Request):
 
 @app.post("/predict")
 def predict(data: dict, request: Request):
+    if model is None:
+        return {"error": "Model not loaded — check server logs for pkl load errors"}
     try:
         # ── Base features (7) ─────────────────────────────────────────
         study    = float(data.get("study_hours_per_day", 0))
