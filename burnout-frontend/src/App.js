@@ -134,9 +134,27 @@ function App() {
   };
 
   useEffect(() => {
+    // ── localStorage version guard ──────────────────────────────────
+    // If data was saved in the old flat format (before Predict.js redesign),
+    // the chatbot context builder breaks. Clear stale keys safely.
+    const APP_VERSION = "2";
+    if (localStorage.getItem("appVersion") !== APP_VERSION) {
+      ["burnoutAnswers", "burnoutFeatures", "burnoutResult", "burnoutRisk"].forEach(
+        (k) => localStorage.removeItem(k)
+      );
+      // Keep lastPrediction only if it has the new nested features format
+      try {
+        const last = JSON.parse(localStorage.getItem("lastPrediction") || "{}");
+        if (!last.features) localStorage.removeItem("lastPrediction");
+      } catch {
+        localStorage.removeItem("lastPrediction");
+      }
+      localStorage.setItem("appVersion", APP_VERSION);
+    }
+
+    // ── Token validation ────────────────────────────────────────────
     const token = localStorage.getItem("token");
     if (!token) return;
-    // Validate token is still good server-side
     fetch(`${API_BASE}/me`, {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -150,9 +168,16 @@ function App() {
         }
       })
       .catch(() => {
-        // Network offline — trust the token for now
         setIsLoggedIn(true);
       });
+  }, []);
+
+  // ── Keep-alive ping every 14 min to prevent Railway cold starts ──
+  useEffect(() => {
+    const ping = () => fetch(`${API_BASE}/ping`).catch(() => {});
+    ping(); // ping immediately on load
+    const id = setInterval(ping, 14 * 60 * 1000);
+    return () => clearInterval(id);
   }, []);
 
   return (

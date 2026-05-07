@@ -8,6 +8,6 @@ pydantic==2.12.5
 scikit-learn
 bcrypt==4.2.1
 PyJWT==2.10.1
-shap>=0.45.0
 lightgbm>=4.0
 optuna>=3.4
+# shap is optional — imported lazily in explain.py; install manually if needed: pip install shap

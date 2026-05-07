@@ -121,6 +121,8 @@ if GEMINI_API_KEY:
     print(f"✅ Gemini REST chatbot enabled (key length: {len(GEMINI_API_KEY)})")
 
 JWT_SECRET = os.environ.get("JWT_SECRET", "dev-secret-change-in-prod")
+if JWT_SECRET == "dev-secret-change-in-prod":
+    print("⚠️  [security] JWT_SECRET is using the default dev value — set JWT_SECRET env var in Railway!")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRY_DAYS = 7
 
@@ -180,7 +182,11 @@ FEATURE_META = {
 }
 
 # ===== DATABASE =====
-conn = sqlite3.connect("burnout.db", check_same_thread=False)
+# DB_PATH lets Railway users point to a persistent volume (e.g. /data/burnout.db)
+# Set DB_PATH env var in Railway → Settings → Variables, then add a Volume at /data
+_DB_PATH = os.environ.get("DB_PATH", "burnout.db")
+conn = sqlite3.connect(_DB_PATH, check_same_thread=False)
+print(f"[db] using {_DB_PATH}")
 cursor = conn.cursor()
 cursor.execute("""
     CREATE TABLE IF NOT EXISTS predictions (
@@ -440,7 +446,14 @@ def home():
     return {
         "message": "Burnout AI API running",
         "gemini_enabled": bool(GEMINI_API_KEY),
+        "model": _active_pkl,
     }
+
+
+@app.get("/ping")
+def ping():
+    """Keep-alive endpoint — frontend pings this every 14 min to prevent Railway cold starts."""
+    return {"ok": True}
 
 
 @app.post("/register")
@@ -758,6 +771,7 @@ def predict(data: dict, request: Request):
             "top_drivers":   top_drivers,
             "prediction_id": pred_id,
             "explanation":   shap_explanation,
+            "model_version": _active_pkl.replace("stress_model_", "").replace(".pkl", ""),
         }
 
     except Exception as e:

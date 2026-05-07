@@ -205,6 +205,7 @@ function Predict() {
         label: data.prediction, risk: data.risk,
         confidence: data.confidence ?? null,
         top_drivers: data.top_drivers ?? [],
+        model_version: data.model_version ?? null,
       });
       setResult(label);
       if (data.prediction === "Low" || data.risk === 0) {
@@ -270,14 +271,15 @@ function Predict() {
     doc.text("Burnout Assessment Report", margin, y);
     y += 10;
 
-    // Risk badge box
-    const riskColor = mlResult?.prediction === "High" ? [239, 68, 68]
-      : mlResult?.prediction === "Low" ? [34, 197, 94] : [245, 158, 11];
+    // Risk badge box — use mlResult.label (not .prediction which doesn't exist)
+    const riskLabel = mlResult?.label || "";
+    const riskColor = riskLabel === "High" ? [239, 68, 68]
+      : riskLabel === "Low" ? [34, 197, 94] : [245, 158, 11];
     doc.setFillColor(...riskColor);
     doc.roundedRect(margin, y, 60, 14, 3, 3, "F");
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(11);
-    doc.text(`${mlResult?.prediction || "—"} Burnout Risk`, margin + 30, y + 9, { align: "center" });
+    doc.text(`${riskLabel || "—"} Burnout Risk`, margin + 30, y + 9, { align: "center" });
     y += 22;
 
     // Confidence
@@ -353,9 +355,9 @@ function Predict() {
     doc.text("Recommended Next Steps", margin, y);
     y += 8;
 
-    const advice = mlResult?.prediction === "High"
+    const advice = riskLabel === "High"
       ? ["Prioritise sleep — aim for 7-8 hours tonight", "Reduce study load by 1-2 hours for the next week", "Schedule a session with the Woxsen wellness team", "Try 5 minutes of box breathing daily"]
-      : mlResult?.prediction === "Medium"
+      : riskLabel === "Medium"
       ? ["Maintain consistent sleep schedule", "Add a 20-minute walk to your daily routine", "Connect with a friend this week", "Track your mood daily using the app"]
       : ["Keep your current routine — it's working", "Continue your recovery plan steps", "Help a peer who might be struggling", "Schedule your next check-in in 3 days"];
 
@@ -369,7 +371,7 @@ function Predict() {
     y += 4;
 
     // Counsellor contact (if High)
-    if (mlResult?.prediction === "High") {
+    if (riskLabel === "High") {
       doc.setFillColor(254, 242, 242);
       doc.roundedRect(margin, y, W - margin * 2, 28, 3, 3, "F");
       doc.setTextColor(185, 28, 28);
@@ -496,6 +498,11 @@ function Predict() {
 
             <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginBottom: 14 }}>
               <Badge variant={variant}>ML prediction</Badge>
+              {mlResult?.model_version && (
+                <Badge variant="default" style={{ background: "var(--surface-strong)", color: "var(--text-muted)", fontSize: 11 }}>
+                  model {mlResult.model_version}
+                </Badge>
+              )}
               {mlResult?.confidence && (
                 <Badge variant="default" style={{ background: "var(--surface-strong)", color: "var(--text)" }}>
                   {mlResult.confidence}% confident
@@ -546,14 +553,14 @@ function Predict() {
             </div>
 
             {/* Top drivers */}
-            {mlResult?.top_drivers?.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5, duration: 0.4 }}
-                style={{ marginTop: 24 }}>
-                <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-dim)", marginBottom: 10 }}>
-                  Top risk drivers
-                </p>
+            <motion.div
+              initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5, duration: 0.4 }}
+              style={{ marginTop: 24 }}>
+              <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-dim)", marginBottom: 10 }}>
+                Top risk drivers
+              </p>
+              {mlResult?.top_drivers?.length > 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {mlResult.top_drivers.map((d) => (
                     <div key={d.feature} style={{
@@ -580,8 +587,14 @@ function Predict() {
                     </div>
                   ))}
                 </div>
-              </motion.div>
-            )}
+              ) : (
+                <div style={{ padding: "12px 16px", borderRadius: "var(--r-md)",
+                  background: "var(--surface)", border: "1px solid var(--border)",
+                  fontSize: 13, color: "var(--text-muted)", textAlign: "center" }}>
+                  🔍 Driver analysis based on your feature importance profile — see personalised insights below.
+                </div>
+              )}
+            </motion.div>
 
             {/* Feedback */}
             <motion.div
@@ -712,12 +725,13 @@ function Predict() {
             </span>
           </div>
 
-          {/* Risk emoji + level */}
+          {/* Risk emoji + level — use hardcoded hex, not CSS vars (html2canvas can't resolve vars) */}
           <div style={{ textAlign: "center" }}>
             <div style={{ fontSize: 52, lineHeight: 1, marginBottom: 8 }}>
               {variant === "danger" ? "🔴" : variant === "warning" ? "🟡" : "🟢"}
             </div>
-            <div style={{ fontSize: 28, fontWeight: 800, color: riskColor, marginBottom: 4, letterSpacing: "-0.02em" }}>
+            <div style={{ fontSize: 28, fontWeight: 800, marginBottom: 4, letterSpacing: "-0.02em",
+              color: variant === "danger" ? "#ef4444" : variant === "warning" ? "#f59e0b" : "#22c55e" }}>
               {mlResult?.label || result?.replace(" Burnout", "") || "—"} Risk
             </div>
             {mlResult?.confidence && (
@@ -892,6 +906,17 @@ function Predict() {
                 </motion.button>
               ))}
             </div>
+          )}
+
+          {/* GPA scale warning — fires if value looks like a 4.0-scale entry */}
+          {q.inputType === "gpa" && value <= 4.5 && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
+              style={{ marginTop: 12, padding: "10px 14px", borderRadius: "var(--r-md)",
+                background: "color-mix(in srgb, #f59e0b 10%, transparent)",
+                border: "1px solid #f59e0b44", fontSize: 12, color: "var(--text)" }}>
+              ⚠️ <strong>Heads up:</strong> this app uses a <strong>10-point GPA scale</strong>. If your university uses 4.0, multiply by 2.5 (e.g. 3.8 → 9.5).
+            </motion.div>
           )}
 
           {/* Mood label below */}
