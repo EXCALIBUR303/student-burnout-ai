@@ -53,7 +53,7 @@ function Navbar({ isLoggedIn, setIsLoggedIn }) {
   }, [location.pathname, isLoggedIn, menuOpen]);
 
   const publicLinks  = [{ to: "/predict", label: "Assessment" }, { to: "/login", label: "Log in" }];
-  const privateLinks = [{ to: "/dashboard", label: "Dashboard" }, { to: "/predict", label: "Predict" }, { to: "/flowchart", label: "Recovery" }];
+  const privateLinks = [{ to: "/dashboard", label: "Dashboard" }, { to: "/predict", label: "Predict" }, { to: "/progress", label: "Progress" }, { to: "/flowchart", label: "Recovery" }];
   const links        = isLoggedIn ? privateLinks : publicLinks;
 
   return (

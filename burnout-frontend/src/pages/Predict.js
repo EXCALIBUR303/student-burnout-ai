@@ -155,8 +155,45 @@ function Predict() {
   const [features, setFeatures] = useState(null);
   const [loading, setLoading]   = useState(false);
   const [mlInsights, setMlInsights] = useState(null);
+  const [whatIf, setWhatIf]           = useState(null);
+  const [whatIfResult, setWhatIfResult] = useState(null);
+  const [whatIfLoading, setWhatIfLoading] = useState(false);
 
   const shareCardRef = useRef();
+
+  // Initialise what-if sliders from the completed assessment features
+  useEffect(() => {
+    if (features && !whatIf) {
+      setWhatIf({
+        sleep:    features.sleep_hours_per_day,
+        study:    features.study_hours_per_day,
+        screen:   features.screen_time_hours    ?? 3.5,
+        physical: features.physical_activity_hours_per_day,
+      });
+    }
+  }, [features]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Debounced re-predict whenever what-if sliders change
+  useEffect(() => {
+    if (!whatIf || !features) return;
+    const timer = setTimeout(async () => {
+      setWhatIfLoading(true);
+      try {
+        const { data } = await axios.post(`${API_BASE}/predict`, {
+          study_hours_per_day:             whatIf.study,
+          sleep_hours_per_day:             whatIf.sleep,
+          social_hours_per_day:            features.social_hours_per_day  ?? 1.5,
+          physical_activity_hours_per_day: whatIf.physical,
+          screen_time_hours:               whatIf.screen,
+          gpa_norm:                        features.gpa_norm              ?? 0.7,
+          extracurricular_hours:           features.extracurricular_hours ?? 0.5,
+        });
+        setWhatIfResult({ label: data.prediction, risk: data.risk, confidence: data.confidence });
+      } catch {}
+      setWhatIfLoading(false);
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [whatIf]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     setValue(answersObj[QUESTIONS[current]?.key] ?? QUESTIONS[current]?.default ?? 5);
@@ -609,6 +646,80 @@ function Predict() {
                 <button className="btn-ghost" onClick={() => sendFeedback(false)} style={{ width: "auto", padding: "8px 20px", fontSize: 14 }}>👎 Off</button>
               </div>
             </motion.div>
+
+            {/* ── What-If Simulator ── */}
+            {whatIf && (
+              <motion.div
+                initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.9, duration: 0.4 }}
+                style={{ marginTop: 24, padding: "20px 20px 16px", background: "var(--surface)",
+                  border: "1px solid var(--border)", borderRadius: "var(--r-md)", textAlign: "left" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.06em",
+                      textTransform: "uppercase", color: "var(--text-dim)" }}>🔮 What-If Simulator</div>
+                    <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>
+                      Drag to see how changes would affect your risk
+                    </div>
+                  </div>
+                  {whatIfResult && (
+                    <motion.div
+                      key={whatIfResult.label}
+                      initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                      style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 2 }}>
+                        {whatIfLoading ? "Calculating…" : "Would become"}
+                      </div>
+                      <div style={{ fontSize: 18, fontWeight: 800,
+                        color: whatIfResult.label === "High" ? "#ef4444"
+                          : whatIfResult.label === "Low" ? "#22c55e" : "#f59e0b" }}>
+                        {whatIfResult.label}
+                        {whatIfResult.risk !== mlResult?.risk && (
+                          <span style={{ fontSize: 13, marginLeft: 6 }}>
+                            {whatIfResult.risk < mlResult?.risk ? "↓" : "↑"}
+                          </span>
+                        )}
+                      </div>
+                      {whatIfResult.confidence && (
+                        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                          {whatIfResult.confidence}% confidence
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </div>
+
+                {[
+                  { key: "sleep",    icon: "😴", label: "Sleep",           unit: "h", min: 3,  max: 12,  step: 0.5 },
+                  { key: "study",    icon: "📚", label: "Study hours",     unit: "h", min: 0,  max: 14,  step: 0.5 },
+                  { key: "screen",   icon: "📱", label: "Screen time",     unit: "h", min: 0,  max: 14,  step: 0.5 },
+                  { key: "physical", icon: "🏃", label: "Physical activity",unit: "h", min: 0,  max: 4,  step: 0.25 },
+                ].map((s) => (
+                  <div key={s.key} style={{ marginBottom: 14 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between",
+                      fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 5 }}>
+                      <span>{s.icon} {s.label}</span>
+                      <span style={{ color: "var(--accent-1)", fontWeight: 700 }}>
+                        {Number(whatIf[s.key]).toFixed(s.step < 1 ? 1 : 0)}{s.unit}
+                      </span>
+                    </div>
+                    <input type="range" className="burn-slider"
+                      min={s.min} max={s.max} step={s.step}
+                      value={whatIf[s.key]}
+                      onChange={(e) => setWhatIf((prev) => ({ ...prev, [s.key]: parseFloat(e.target.value) }))}
+                      style={{ marginBottom: 0 }}
+                    />
+                  </div>
+                ))}
+
+                {whatIfResult && whatIfResult.risk === mlResult?.risk && !whatIfLoading && (
+                  <div style={{ textAlign: "center", fontSize: 12, color: "var(--text-muted)",
+                    marginTop: 4, padding: "8px 0" }}>
+                    Same risk level — try bigger changes to see impact
+                  </div>
+                )}
+              </motion.div>
+            )}
 
             {/* Feature chips */}
             {savedFeatures.study_hours_per_day && (

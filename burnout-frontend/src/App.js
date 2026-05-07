@@ -23,6 +23,7 @@ import Predict from "./pages/Predict";
 import Flowchart from "./pages/Flowchart";
 import Landing from "./pages/Landing";
 import ForgotPassword from "./pages/ForgotPassword";
+import Progress from "./pages/Progress";
 import NotFound from "./pages/NotFound";
 
 import { ThemeProvider } from "./context/ThemeContext";
@@ -89,6 +90,15 @@ function AppRoutes({ isLoggedIn, setIsLoggedIn }) {
           element={
             isLoggedIn
               ? <Page variant="fade"><Flowchart /></Page>
+              : <Navigate to="/login" replace />
+          }
+        />
+
+        <Route
+          path="/progress"
+          element={
+            isLoggedIn
+              ? <Page variant="slideUp"><Progress /></Page>
               : <Navigate to="/login" replace />
           }
         />
