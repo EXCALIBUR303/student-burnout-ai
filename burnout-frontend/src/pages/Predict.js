@@ -162,31 +162,42 @@ function Predict() {
   const shareCardRef = useRef();
 
   // Initialise what-if sliders from the completed assessment features
+  // If features state is null (e.g. page reload after assessment), fall back to localStorage
   useEffect(() => {
-    if (features && !whatIf) {
-      setWhatIf({
-        sleep:    features.sleep_hours_per_day,
-        study:    features.study_hours_per_day,
-        screen:   features.screen_time_hours    ?? 3.5,
-        physical: features.physical_activity_hours_per_day,
-      });
+    if (!whatIf) {
+      const src = features || (() => {
+        try { return JSON.parse(localStorage.getItem("burnoutFeatures") || "null"); } catch { return null; }
+      })();
+      if (src) {
+        setWhatIf({
+          sleep:    src.sleep_hours_per_day,
+          study:    src.study_hours_per_day,
+          screen:   src.screen_time_hours    ?? 3.5,
+          physical: src.physical_activity_hours_per_day,
+        });
+      }
     }
   }, [features]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounced re-predict whenever what-if sliders change
   useEffect(() => {
-    if (!whatIf || !features) return;
+    if (!whatIf) return;
+    // prefer live features state; fall back to cached localStorage features
+    const src = features || (() => {
+      try { return JSON.parse(localStorage.getItem("burnoutFeatures") || "null"); } catch { return null; }
+    })();
+    if (!src) return;
     const timer = setTimeout(async () => {
       setWhatIfLoading(true);
       try {
         const { data } = await axios.post(`${API_BASE}/predict`, {
           study_hours_per_day:             whatIf.study,
           sleep_hours_per_day:             whatIf.sleep,
-          social_hours_per_day:            features.social_hours_per_day  ?? 1.5,
+          social_hours_per_day:            src.social_hours_per_day  ?? 1.5,
           physical_activity_hours_per_day: whatIf.physical,
           screen_time_hours:               whatIf.screen,
-          gpa_norm:                        features.gpa_norm              ?? 0.7,
-          extracurricular_hours:           features.extracurricular_hours ?? 0.5,
+          gpa_norm:                        src.gpa_norm              ?? 0.7,
+          extracurricular_hours:           src.extracurricular_hours ?? 0.5,
         });
         setWhatIfResult({ label: data.prediction, risk: data.risk, confidence: data.confidence });
       } catch {}

@@ -4,8 +4,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 const TABS = [
   { key: "home",     label: "Home",     icon: "🏠", path: "/" },
   { key: "predict",  label: "Predict",  icon: "🔮", path: "/predict" },
+  { key: "progress", label: "Progress", icon: "📈", path: "/progress" },
   { key: "recovery", label: "Recovery", icon: "🌱", path: "/flowchart" },
-  { key: "dashboard",label: "Dashboard",icon: "📊", path: "/dashboard" },
   { key: "chat",     label: "Chat",     icon: "💬", path: null },
 ];
 
@@ -26,6 +26,7 @@ export default function BottomNav({ onChatOpen }) {
     const p = location.pathname;
     if (p === "/") return "home";
     if (p.startsWith("/predict")) return "predict";
+    if (p.startsWith("/progress")) return "progress";
     if (p.startsWith("/flowchart")) return "recovery";
     if (p.startsWith("/dashboard")) return "dashboard";
     return null;

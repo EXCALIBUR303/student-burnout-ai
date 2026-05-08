@@ -75,6 +75,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 function Progress() {
   const [history, setHistory]   = useState([]);
   const [insights, setInsights] = useState(null);
+  const [cohort,  setCohort]    = useState(null);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(null);
 
@@ -85,10 +86,12 @@ function Progress() {
     Promise.all([
       axios.get(`${API_BASE}/history`, { headers }),
       axios.get(`${API_BASE}/insights`, { headers }),
+      axios.get(`${API_BASE}/cohort`,  { headers }),
     ])
-      .then(([h, i]) => {
+      .then(([h, i, c]) => {
         setHistory(h.data || []);
         setInsights(i.data || null);
+        setCohort(c.data || null);
       })
       .catch(() => setError("Could not load your history. Try again later."))
       .finally(() => setLoading(false));
@@ -112,13 +115,8 @@ function Progress() {
   const trendIcon = trend?.direction === "improving" ? "📈"
     : trend?.direction === "worsening" ? "📉" : "➡️";
 
-  // Percentile from cohort (all predictions vs user's latest)
-  const cohortPct = useMemo(() => {
-    if (!latest) return null;
-    const userRisk = RISK_NUM[latest.result] || 1;
-    // simple: if High risk → top 30%, Medium → 60%, Low → 90%
-    return userRisk === 3 ? 72 : userRisk === 2 ? 45 : 18;
-  }, [latest]);
+  // Percentile from real /cohort endpoint — % of users with worse risk than you
+  const cohortPct = cohort?.user_rank_pct ?? null;
 
   // ── empty state ───────────────────────────────────────────────────────────
   if (!loading && !error && history.length === 0) {

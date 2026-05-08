@@ -24,6 +24,7 @@ import Flowchart from "./pages/Flowchart";
 import Landing from "./pages/Landing";
 import ForgotPassword from "./pages/ForgotPassword";
 import Progress from "./pages/Progress";
+import Professor from "./pages/Professor";
 import NotFound from "./pages/NotFound";
 
 import { ThemeProvider } from "./context/ThemeContext";
@@ -99,6 +100,15 @@ function AppRoutes({ isLoggedIn, setIsLoggedIn }) {
           element={
             isLoggedIn
               ? <Page variant="slideUp"><Progress /></Page>
+              : <Navigate to="/login" replace />
+          }
+        />
+
+        <Route
+          path="/professor"
+          element={
+            isLoggedIn
+              ? <Page variant="fade"><Professor /></Page>
               : <Navigate to="/login" replace />
           }
         />
@@ -201,13 +211,11 @@ function App() {
           <div style={{ position: "relative", zIndex: 1, minHeight: "100vh" }}>
             <Navbar isLoggedIn={isLoggedIn} setIsLoggedIn={setIsLoggedIn} />
             <AppRoutes isLoggedIn={isLoggedIn} setIsLoggedIn={setIsLoggedIn} />
-            {isLoggedIn && (
-              <ChatBot
-                userContext={buildUserContext()}
-                forceOpen={chatOpen || undefined}
-                onClose={() => setChatOpen(false)}
-              />
-            )}
+            <ChatBot
+              userContext={buildUserContext()}
+              forceOpen={chatOpen || undefined}
+              onClose={() => setChatOpen(false)}
+            />
             <BottomNav onChatOpen={() => setChatOpen(true)} />
           </div>
           {showOnboarding && <OnboardingModal onClose={() => setShowOnboarding(false)} />}

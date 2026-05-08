@@ -225,13 +225,20 @@ cursor.execute("""
 conn.commit()
 print("[OK] Users table ready")
 
-# Migrate predictions table: add user_id column if missing
-try:
-    cursor.execute("ALTER TABLE predictions ADD COLUMN user_id INTEGER REFERENCES users(id)")
-    conn.commit()
-    print("[OK] Added user_id column to predictions")
-except Exception:
-    pass  # Column already exists
+# Migrate predictions table: add missing columns if they don't exist yet
+for _col, _type in [
+    ("user_id",     "INTEGER REFERENCES users(id)"),
+    ("screen_time", "REAL"),
+    ("gpa_norm",    "REAL"),
+    ("extra",       "REAL"),
+    ("confidence",  "REAL"),
+]:
+    try:
+        cursor.execute(f"ALTER TABLE predictions ADD COLUMN {_col} {_type}")
+        conn.commit()
+        print(f"[OK] Added column: {_col}")
+    except Exception:
+        pass  # column already exists
 
 _init_feedback(conn)
 print("[OK] Feedback table ready")
@@ -635,33 +642,74 @@ def get_dataset_stats():
 
 @app.get("/history")
 def get_prediction_history(request: Request):
-    """Returns predictions: personal if token present, all rows otherwise."""
+    """Returns the logged-in user's predictions only. Guests get an empty list."""
     try:
         user = get_user_from_request(request)
-        if user:
-            cursor.execute(
-                "SELECT id, study, sleep, social, physical, result, created_at "
-                "FROM predictions WHERE user_id = ? ORDER BY created_at DESC LIMIT 200",
-                (user["sub"],),
-            )
-        else:
-            cursor.execute(
-                "SELECT id, study, sleep, social, physical, result, created_at "
-                "FROM predictions ORDER BY created_at DESC LIMIT 200"
-            )
+        if not user:
+            return []   # privacy: guests cannot see others' data
+        cursor.execute(
+            "SELECT id, study, sleep, social, physical, result, created_at, "
+            "screen_time, gpa_norm, extra, confidence "
+            "FROM predictions WHERE user_id = ? ORDER BY created_at DESC LIMIT 200",
+            (user["sub"],),
+        )
         rows = cursor.fetchall()
         return [
             {
-                "id":         r[0],
-                "study":      r[1],
-                "sleep":      r[2],
-                "social":     r[3],
-                "physical":   r[4],
-                "result":     r[5],
-                "created_at": r[6],
+                "id":          r[0],
+                "study":       r[1],
+                "sleep":       r[2],
+                "social":      r[3],
+                "physical":    r[4],
+                "result":      r[5],
+                "created_at":  r[6],
+                "screen_time": r[7],
+                "gpa_norm":    r[8],
+                "extra":       r[9],
+                "confidence":  r[10],
             }
             for r in rows
         ]
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/cohort")
+def cohort_stats(request: Request):
+    """Anonymous aggregate stats for cohort comparison on the Progress page."""
+    try:
+        # Overall counts by risk level
+        cur2 = conn.execute("SELECT result, COUNT(*) FROM predictions GROUP BY result")
+        counts = {r[0]: r[1] for r in cur2.fetchall()}
+        total  = sum(counts.values()) or 1
+
+        # User's latest risk for percentile
+        user = get_user_from_request(request)
+        user_rank_pct = None
+        if user:
+            cur3 = conn.execute(
+                "SELECT result FROM predictions WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+                (user["sub"],),
+            )
+            row = cur3.fetchone()
+            if row:
+                user_result = row[0]
+                # % of users with WORSE (higher) risk than the current user
+                risk_order = {"Low": 0, "Medium": 1, "High": 2}
+                user_risk  = risk_order.get(user_result, 1)
+                worse = sum(v for k, v in counts.items() if risk_order.get(k, 1) > user_risk)
+                user_rank_pct = round(worse / total * 100, 1)
+
+        return {
+            "total":       int(total),
+            "low_count":   int(counts.get("Low",    0)),
+            "medium_count":int(counts.get("Medium", 0)),
+            "high_count":  int(counts.get("High",   0)),
+            "low_pct":     round(counts.get("Low",    0) / total * 100, 1),
+            "medium_pct":  round(counts.get("Medium", 0) / total * 100, 1),
+            "high_pct":    round(counts.get("High",   0) / total * 100, 1),
+            "user_rank_pct": user_rank_pct,  # % of users with worse risk than you
+        }
     except Exception as e:
         return {"error": str(e)}
 
@@ -758,8 +806,9 @@ def predict(data: dict, request: Request):
         user    = get_user_from_request(request)
         user_id = user["sub"] if user else None
         cursor.execute(
-            "INSERT INTO predictions (study, sleep, social, physical, result, user_id) VALUES (?,?,?,?,?,?)",
-            (study, sleep, social, physical, result_label, user_id),
+            "INSERT INTO predictions (study, sleep, social, physical, result, user_id, screen_time, gpa_norm, extra, confidence) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (study, sleep, social, physical, result_label, user_id, screen, gpa_norm, extra, confidence),
         )
         conn.commit()
         pred_id = cursor.lastrowid
