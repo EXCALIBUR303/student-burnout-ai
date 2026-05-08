@@ -84,9 +84,9 @@ function Progress() {
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
     Promise.all([
-      axios.get(`${API_BASE}/history`, { headers }),
+      axios.get(`${API_BASE}/history`,  { headers }),
       axios.get(`${API_BASE}/insights`, { headers }),
-      axios.get(`${API_BASE}/cohort`,  { headers }),
+      axios.get(`${API_BASE}/cohort`,   { headers }).catch(() => ({ data: null })),
     ])
       .then(([h, i, c]) => {
         setHistory(h.data || []);

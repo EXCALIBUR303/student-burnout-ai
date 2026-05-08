@@ -59,14 +59,17 @@ export default function Professor() {
     const token   = localStorage.getItem("token");
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
     Promise.all([
-      axios.get(`${API_BASE}/cohort`, { headers }),
-      axios.get(`${API_BASE}/stats`,  { headers }),
+      axios.get(`${API_BASE}/cohort`, { headers }).catch(() => ({ data: null })),
+      axios.get(`${API_BASE}/stats`,  { headers }).catch(() => ({ data: null })),
     ])
       .then(([c, s]) => {
-        setCohort(c.data);
-        setStats(s.data);
+        if (!c.data && !s.data) {
+          setError("Could not load dashboard data. Backend may be cold — try refreshing in 10s.");
+        } else {
+          setCohort(c.data);
+          setStats(s.data);
+        }
       })
-      .catch(() => setError("Could not load dashboard data. Backend may be cold — try refreshing in 10s."))
       .finally(() => setLoading(false));
   }, []);
 
