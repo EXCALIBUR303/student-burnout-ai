@@ -12,7 +12,7 @@ import AnimatedNumber from "../components/AnimatedNumber";
 import API_BASE from "../utils/api";
 import { jsPDF } from "jspdf";
 
-// 8 questions total: 7 objective hours/values for the model + 1 wellness for chatbot context
+// 11 questions: 7 objective + 4 subjective psychological (used by v5 ML model)
 const QUESTIONS = [
   {
     key: "study", icon: "📚", type: "Academic",
@@ -63,16 +63,39 @@ const QUESTIONS = [
     inputType: "hours", min: 0, max: 5, step: 0.25, default: 0.5,
     presets: [0, 0.5, 1, 2, 3],
   },
+  // ── Subjective psychological questions (NEW in v5 — used by ML model) ──
+  {
+    key: "anxiety", icon: "😰", type: "Psychological",
+    q: "How often do you feel anxious about your studies?",
+    tip: "Anxiety is one of the strongest subjective predictors of burnout, independent of hours worked.",
+    inputType: "scale5", min: 1, max: 5, step: 1, default: 3,
+    scaleLabels: ["Never", "Rarely", "Sometimes", "Often", "Almost always"],
+  },
+  {
+    key: "support", icon: "🤝", type: "Social",
+    q: "How strong is your social support system?",
+    tip: "Strong support (family, friends, mentors) is the #1 protective factor against burnout.",
+    inputType: "scale5", min: 1, max: 5, step: 1, default: 3,
+    scaleLabels: ["Very weak", "Weak", "Moderate", "Strong", "Very strong"],
+  },
+  {
+    key: "career", icon: "💼", type: "Future",
+    q: "How worried are you about your future career?",
+    tip: "Future-oriented anxiety amplifies present stress and is a key MBI burnout dimension.",
+    inputType: "scale5", min: 1, max: 5, step: 1, default: 3,
+    scaleLabels: ["Not at all", "A little", "Moderately", "Quite worried", "Very worried"],
+  },
   {
     key: "mood", icon: "💭", type: "Wellness",
     q: "Right now, how would you rate your overall stress?",
-    tip: "This helps the chatbot give you contextual support — it's NOT used by the ML model itself.",
+    tip: "Self-rated stress is a strong direct signal — and is fed into the ML model alongside the others.",
     inputType: "mood", min: 0, max: 10, step: 1, default: 5,
     moodLabels: ["😌 Calm", "😊 Light", "😐 OK", "😟 Tense", "😣 Heavy", "😫 Overwhelmed"],
   },
 ];
 
 const mapToApiFeatures = (answersObj) => ({
+  // Objective lifestyle features (7)
   study_hours_per_day:             parseFloat(Number(answersObj.study).toFixed(1)),
   sleep_hours_per_day:             parseFloat(Number(answersObj.sleep).toFixed(1)),
   social_hours_per_day:            parseFloat(Number(answersObj.social).toFixed(1)),
@@ -80,10 +103,20 @@ const mapToApiFeatures = (answersObj) => ({
   screen_time_hours:               parseFloat(Number(answersObj.screen).toFixed(1)),
   gpa_norm:                        parseFloat((Number(answersObj.gpa) / 10).toFixed(2)),
   extracurricular_hours:           parseFloat(Number(answersObj.extra).toFixed(2)),
+  // Subjective psychological features (4) — normalised to 0-1 for the ML model
+  // anxiety: 1-5 scale → 0-1
+  anxiety_norm:                    parseFloat(((Number(answersObj.anxiety) - 1) / 4).toFixed(3)),
+  // support: 1-5 (higher = stronger) → INVERT to deficit (higher = LACKING support)
+  social_support_deficit:          parseFloat(((5 - Number(answersObj.support)) / 4).toFixed(3)),
+  // career: 1-5 scale → 0-1
+  career_concern_norm:             parseFloat(((Number(answersObj.career) - 1) / 4).toFixed(3)),
+  // mood: 0-10 scale → 0-1
+  mood_norm:                       parseFloat((Number(answersObj.mood) / 10).toFixed(3)),
 });
 
 const calculateLocalScore = (a) => {
   let s = 0;
+  // Objective
   if (a.study   > 8)    s += 3;
   if (a.study   > 10)   s += 2;
   if (a.sleep   < 6)    s += 4;
@@ -94,7 +127,11 @@ const calculateLocalScore = (a) => {
   if (a.screen  > 10)   s += 2;
   if (a.gpa     < 5)    s += 2;
   if (a.extra   > 3)    s += 1;
-  if (a.mood   != null && a.mood > 6) s += 2;
+  // Subjective
+  if (a.anxiety != null && a.anxiety >= 4) s += 3;
+  if (a.support != null && a.support <= 2) s += 3;
+  if (a.career  != null && a.career  >= 4) s += 2;
+  if (a.mood    != null && a.mood    >  6) s += 2;
   return s;
 };
 
@@ -215,9 +252,10 @@ function Predict() {
     const provisional = { ...answersObj, [QUESTIONS[current].key]: value };
     return calculateLocalScore(provisional);
   }, [answersObj, value, current]);
-  const liveStatus = liveScore >= 12
+  // Score range expanded with subjective questions: max ~32 instead of 22
+  const liveStatus = liveScore >= 17
     ? { label: "High",     variant: "danger",  icon: "🔥" }
-    : liveScore >= 6
+    : liveScore >= 8
     ? { label: "Moderate", variant: "warning", icon: "⚠" }
     : { label: "Low",      variant: "success", icon: "🌱" };
 
@@ -922,12 +960,13 @@ function Predict() {
 
   /* ======================= QUESTIONNAIRE VIEW ======================= */
   const q = QUESTIONS[current];
-  const isMood = q.inputType === "mood";
+  const isMood   = q.inputType === "mood";
+  const isScale5 = q.inputType === "scale5";
 
   return (
     <div className="dashboard-container" style={{ maxWidth: 760 }}>
       <h1 className="dashboard-title">AI Burnout Assessment</h1>
-      <p className="dashboard-subtitle">8 quick questions. Be honest — the model gets sharper with real numbers.</p>
+      <p className="dashboard-subtitle">{QUESTIONS.length} quick questions. Be honest — the model gets sharper with real numbers.</p>
 
       {/* Stepper */}
       <div className="stepper" aria-label="Progress">
@@ -947,7 +986,7 @@ function Predict() {
           </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
             <div className="mono" style={{ fontSize: 36, fontWeight: 700, lineHeight: 1 }}>{liveScore}</div>
-            <span style={{ color: "var(--text-dim)", fontSize: 13 }}>/ 22</span>
+            <span style={{ color: "var(--text-dim)", fontSize: 13 }}>/ 32</span>
           </div>
         </div>
         <Badge variant={liveStatus.variant} icon={liveStatus.icon}>{liveStatus.label}</Badge>
@@ -988,6 +1027,18 @@ function Predict() {
               <div style={{ fontSize: 60 }}>
                 {q.moodLabels[Math.min(Math.floor(value / 2), q.moodLabels.length - 1)].split(" ")[0]}
               </div>
+            ) : isScale5 ? (
+              <>
+                <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1.2,
+                  background: "var(--grad-primary, linear-gradient(135deg, #7c5cff, #00d4ff))",
+                  WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+                  backgroundClip: "text" }}>
+                  {q.scaleLabels[Math.min(Math.max(Math.round(value) - 1, 0), q.scaleLabels.length - 1)]}
+                </div>
+                <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 6, fontWeight: 600 }}>
+                  {Math.round(value)} of 5
+                </div>
+              </>
             ) : (
               <>
                 <div style={{ fontSize: 64, fontWeight: 800, color: "var(--accent-1)",
@@ -1015,12 +1066,21 @@ function Predict() {
           <div style={{ display: "flex", justifyContent: "space-between",
             fontSize: 11, fontWeight: 600, letterSpacing: "0.08em",
             textTransform: "uppercase", color: "var(--text-dim)", marginTop: 10 }}>
-            <span>{q.min}{q.inputType === "gpa" ? "" : "h"}</span>
-            <span>{q.max}{q.inputType === "gpa" ? "" : "h"}</span>
+            {isScale5 ? (
+              <>
+                <span>{q.scaleLabels[0]}</span>
+                <span>{q.scaleLabels[q.scaleLabels.length - 1]}</span>
+              </>
+            ) : (
+              <>
+                <span>{q.min}{q.inputType === "gpa" || isMood ? "" : "h"}</span>
+                <span>{q.max}{q.inputType === "gpa" || isMood ? "" : "h"}</span>
+              </>
+            )}
           </div>
 
-          {/* Quick presets */}
-          {q.presets && (
+          {/* Quick presets — scale5 questions use the slider only (5 values, no presets needed) */}
+          {q.presets && !isScale5 && (
             <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginTop: 18 }}>
               {q.presets.map((p) => (
                 <motion.button

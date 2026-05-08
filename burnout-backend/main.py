@@ -138,13 +138,14 @@ app.add_middleware(
 
 # ===== MODEL =====
 import numpy as np  # needed for feature importance averaging across calibration folds
+_V5_PKL = "stress_model_v5.pkl"
 _V4_PKL = "stress_model_v4.pkl"
 _V3_PKL = "stress_model_v3.pkl"
 _V2_PKL = "stress_model.pkl"
 
 model = None
 _active_pkl = "none"
-for _pkl in [_V4_PKL, _V3_PKL, _V2_PKL]:
+for _pkl in [_V5_PKL, _V4_PKL, _V3_PKL, _V2_PKL]:
     if os.path.exists(_pkl):
         try:
             model = joblib.load(_pkl)
@@ -157,24 +158,35 @@ for _pkl in [_V4_PKL, _V3_PKL, _V2_PKL]:
 if model is None:
     print("[model] ⚠️  No model loaded — /predict will return error. Check pkl files.")
 
+# Detect which feature schema this model expects (v5 has 18 features, v4/v3/v2 have 14)
+_IS_V5 = _active_pkl == _V5_PKL
+
 labels = {0: "Low", 1: "Medium", 2: "High"}
 
-# v2 model — 14 features (7 base + 7 engineered)
-FEATURE_NAMES = [
-    "study_hours_per_day", "sleep_hours_per_day", "social_hours_per_day",
-    "physical_activity_hours_per_day",
-    "gpa_norm",               # GPA normalised 0-1
-    "screen_time_hours",      # daily screen/social-media hours
-    "extracurricular_hours",  # clubs/activities hours per day
-    # --- engineered ---
-    "study_sleep_ratio",      # study / (sleep + 0.1)
-    "sleep_deficit",          # max(0, 7.5 - sleep)
-    "burnout_index",          # study_sleep_ratio * sleep_deficit
-    "active_hours",           # study + physical
-    "rest_ratio",             # (sleep + physical) / total
-    "productive_vs_leisure",  # study / (social + physical + 0.1)
-    "hourly_load",            # (study + social + physical + screen) / 16
-]
+# v5: 7 objective + 4 subjective + 7 engineered = 18 features
+# v2-v4: 7 objective + 7 engineered = 14 features
+if _IS_V5:
+    FEATURE_NAMES = [
+        # ── Objective lifestyle ──
+        "study_hours_per_day", "sleep_hours_per_day", "social_hours_per_day",
+        "physical_activity_hours_per_day", "gpa_norm",
+        "screen_time_hours", "extracurricular_hours",
+        # ── Subjective psychological (NEW v5) ──
+        "anxiety_norm", "social_support_deficit",
+        "career_concern_norm", "mood_norm",
+        # ── Engineered ──
+        "study_sleep_ratio", "sleep_deficit", "burnout_index",
+        "active_hours", "rest_ratio",
+        "productive_vs_leisure", "hourly_load",
+    ]
+else:
+    FEATURE_NAMES = [
+        "study_hours_per_day", "sleep_hours_per_day", "social_hours_per_day",
+        "physical_activity_hours_per_day",
+        "gpa_norm", "screen_time_hours", "extracurricular_hours",
+        "study_sleep_ratio", "sleep_deficit", "burnout_index",
+        "active_hours", "rest_ratio", "productive_vs_leisure", "hourly_load",
+    ]
 
 FEATURE_META = {
     "study_hours_per_day":             {"label": "Study load",         "emoji": "📚", "avg": 6.5,  "high_is_risk": True},
@@ -184,6 +196,12 @@ FEATURE_META = {
     "gpa_norm":                        {"label": "GPA",                "emoji": "🎓", "avg": 0.7,  "high_is_risk": False},
     "screen_time_hours":               {"label": "Screen time",        "emoji": "📱", "avg": 2.0,  "high_is_risk": True},
     "extracurricular_hours":           {"label": "Extracurricular",    "emoji": "🎭", "avg": 1.5,  "high_is_risk": False},
+    # ── Subjective (v5) ──
+    "anxiety_norm":                    {"label": "Anxiety level",      "emoji": "😰", "avg": 0.4,  "high_is_risk": True},
+    "social_support_deficit":          {"label": "Support deficit",    "emoji": "🤝", "avg": 0.4,  "high_is_risk": True},
+    "career_concern_norm":             {"label": "Career worry",       "emoji": "💼", "avg": 0.4,  "high_is_risk": True},
+    "mood_norm":                       {"label": "Self-rated stress",  "emoji": "💭", "avg": 0.4,  "high_is_risk": True},
+    # ── Engineered ──
     "study_sleep_ratio":               {"label": "Study/sleep ratio",  "emoji": "⚖️", "avg": 0.9,  "high_is_risk": True},
     "sleep_deficit":                   {"label": "Sleep deficit",      "emoji": "🌙", "avg": 0.5,  "high_is_risk": True},
     "burnout_index":                   {"label": "Burnout index",      "emoji": "🔥", "avg": 0.5,  "high_is_risk": True},
@@ -728,6 +746,14 @@ def predict(data: dict, request: Request):
         screen   = float(data.get("screen_time_hours", 2.0))  # daily screen hours
         extra    = float(data.get("extracurricular_hours", 1.0))
 
+        # ── Subjective features (4) — defaults to mid-scale when not provided ──
+        # These come from the new psychological questions in v5; if older
+        # frontends don't send them, we fall back to the population average.
+        anxiety_norm           = float(data.get("anxiety_norm",          0.4))
+        social_support_deficit = float(data.get("social_support_deficit", 0.4))
+        career_concern_norm    = float(data.get("career_concern_norm",   0.4))
+        mood_norm              = float(data.get("mood_norm",             0.4))
+
         # ── Clip to training bounds (mirrors trainer.py CLIP) ─────────
         study    = min(max(study,    0), 18)
         sleep    = min(max(sleep,    2), 14)
@@ -736,6 +762,11 @@ def predict(data: dict, request: Request):
         gpa_norm = min(max(gpa_norm, 0),  1)
         screen   = min(max(screen,   0), 16)
         extra    = min(max(extra,    0),  8)
+        # Subjective features all live on [0, 1]
+        anxiety_norm           = min(max(anxiety_norm,           0), 1)
+        social_support_deficit = min(max(social_support_deficit, 0), 1)
+        career_concern_norm    = min(max(career_concern_norm,    0), 1)
+        mood_norm              = min(max(mood_norm,              0), 1)
 
         total = (study + sleep + social + physical) or 1.0
 
@@ -756,6 +787,10 @@ def predict(data: dict, request: Request):
             "gpa_norm":                        gpa_norm,
             "screen_time_hours":               screen,
             "extracurricular_hours":           extra,
+            "anxiety_norm":                    anxiety_norm,
+            "social_support_deficit":          social_support_deficit,
+            "career_concern_norm":             career_concern_norm,
+            "mood_norm":                       mood_norm,
             "study_sleep_ratio":               study_sleep_ratio,
             "sleep_deficit":                   sleep_deficit,
             "burnout_index":                   burnout_index,
@@ -781,13 +816,19 @@ def predict(data: dict, request: Request):
         }
 
         # ── Top drivers ───────────────────────────────────────────────
-        # Only use the 7 base (human-readable) input features, not engineered ones.
+        # Use human-readable features only (objective + subjective, never engineered).
         # Rank by how far each value deviates in the risky direction for THIS user.
         BASE_FEATURES = [
             "study_hours_per_day", "sleep_hours_per_day", "social_hours_per_day",
             "physical_activity_hours_per_day", "gpa_norm", "screen_time_hours",
             "extracurricular_hours",
         ]
+        # Include subjective features in driver ranking ONLY if v5 model is loaded
+        # AND the frontend supplied real values (not defaults)
+        if _IS_V5:
+            for sub in ["anxiety_norm", "social_support_deficit", "career_concern_norm", "mood_norm"]:
+                if sub in data:  # only count if frontend explicitly sent it
+                    BASE_FEATURES.append(sub)
         driver_scores = []
         for fname in BASE_FEATURES:
             meta = FEATURE_META[fname]
@@ -804,13 +845,20 @@ def predict(data: dict, request: Request):
         # Sort by deviation descending — most concerning first
         driver_scores.sort(key=lambda x: x[1], reverse=True)
 
+        # Subjective features (and gpa_norm) are 0-1 scale — display as 0-10 / percent
+        SCALED_DISPLAY = {"gpa_norm", "anxiety_norm", "social_support_deficit",
+                          "career_concern_norm", "mood_norm"}
+
         top_drivers = []
         for fname, deviation, concerning in driver_scores[:3]:
             meta = FEATURE_META[fname]
             val  = feature_vals[fname]
-            # For gpa_norm, display as 0-10 scale for readability
-            display_val = round(val * 10, 1) if fname == "gpa_norm" else round(val, 1)
-            display_avg = round(meta["avg"] * 10, 1) if fname == "gpa_norm" else meta["avg"]
+            if fname in SCALED_DISPLAY:
+                display_val = round(val * 10, 1)
+                display_avg = round(meta["avg"] * 10, 1)
+            else:
+                display_val = round(val, 1)
+                display_avg = meta["avg"]
             top_drivers.append({
                 "feature":   fname,
                 "label":     meta["label"],

@@ -36,6 +36,12 @@ UNIFIED_COLUMNS = [
     "gpa_norm",
     "screen_time_hours",
     "extracurricular_hours",
+    # ── Subjective features (NEW in v5) ──
+    "anxiety_norm",            # 0-1, higher = more anxious
+    "social_support_deficit",  # 0-1, higher = LESS support (risk)
+    "career_concern_norm",     # 0-1, higher = more worried
+    "mood_norm",               # 0-1, higher = more stressed
+    # ── Targets ──
     "target_continuous",
     "target_class",
     "source",
@@ -145,7 +151,12 @@ def load_sleep_health(path: str = "Sleep_health_and_lifestyle_dataset.csv") -> p
 
 
 def load_stress_level(path: str = "StressLevelDataset.csv") -> pd.DataFrame | None:
-    """Student stress level dataset (survey ratings)."""
+    """
+    Student stress level dataset (1100 rows, 21 columns of survey ratings).
+
+    UPGRADE in v5: extracts all 4 subjective features (anxiety, social support,
+    career concern, mood proxy) — previously only 3 of 20 columns were used.
+    """
     if not os.path.exists(path):
         return None
 
@@ -154,16 +165,36 @@ def load_stress_level(path: str = "StressLevelDataset.csv") -> pd.DataFrame | No
     stress_map = {0: 0.15, 1: 0.5, 2: 0.85}
 
     out = pd.DataFrame()
+    # ── Objective lifestyle proxies (from Likert ratings) ──
     # study_load (0–5 rating) → scale to approximate study hours: * 1.2
     out["study_hours_per_day"] = pd.to_numeric(df["study_load"], errors="coerce") * 1.2
-    # sleep_quality (0–5 rating) → invert to sleep hours: 4 + (10 - val*2) * 0.4
-    # The spec uses a 0-10 scale formula; we keep the formula as-is for the raw values.
+    # sleep_quality (0–5, higher=better) → approximate sleep hours
     sleep_q = pd.to_numeric(df["sleep_quality"], errors="coerce")
     out["sleep_hours_per_day"] = 4 + (10 - sleep_q) * 0.4
-    # extracurricular_activities → * 1.5
     out["extracurricular_hours"] = (
         pd.to_numeric(df["extracurricular_activities"], errors="coerce") * 1.5
     )
+
+    # ── Subjective features (NEW in v5) ──
+    # anxiety_level: 0-21 scale → normalize to 0-1
+    out["anxiety_norm"] = (
+        pd.to_numeric(df["anxiety_level"], errors="coerce") / 21.0
+    ).clip(0, 1)
+    # social_support: 0-3 scale where higher = MORE support
+    # We need DEFICIT (higher = WORSE), so invert: (3 - val) / 3
+    out["social_support_deficit"] = (
+        (3 - pd.to_numeric(df["social_support"], errors="coerce")) / 3.0
+    ).clip(0, 1)
+    # future_career_concerns: 0-5 scale, higher = more worried (already a deficit)
+    out["career_concern_norm"] = (
+        pd.to_numeric(df["future_career_concerns"], errors="coerce") / 5.0
+    ).clip(0, 1)
+    # No direct mood field — derive from headache + breathing_problem (0-5 each)
+    # as an embodied-stress proxy: physical symptoms ≈ subjective stress
+    headache = pd.to_numeric(df["headache"], errors="coerce") / 5.0
+    breathing = pd.to_numeric(df["breathing_problem"], errors="coerce") / 5.0
+    out["mood_norm"] = ((headache + breathing) / 2.0).clip(0, 1)
+
     out["target_continuous"] = pd.to_numeric(df["stress_level"], errors="coerce").map(stress_map)
 
     return _finalize(out, "stress_level")
@@ -252,13 +283,47 @@ def load_sleep_patterns(path: str = "student_sleep_patterns.csv") -> pd.DataFram
 def load_stress_survey(path: str = "Stress_Dataset.csv") -> pd.DataFrame | None:
     """
     Stress_Dataset.csv: 843 rows of 1-5 scale survey items.
-    Synthesizes a continuous burnout label from the average of key
-    symptom intensity scores — more robust than the imbalanced explicit target.
+
+    UPGRADE in v5: extracts subjective features (anxiety, social isolation,
+    career confidence, mood) from individual survey items rather than just
+    averaging everything into the target. Now provides 4/4 subjective coverage.
     """
     df = _safe_csv(path)
     if df is None:
         return None
 
+    def _find_col(keyword: str):
+        for c in df.columns:
+            if keyword.lower() in c.lower():
+                return c
+        return None
+
+    def _norm(col_name: str):
+        """1-5 Likert → 0-1, with NaN-safe handling."""
+        if col_name is None or col_name not in df.columns:
+            return pd.Series(float("nan"), index=df.index)
+        s = pd.to_numeric(df[col_name], errors="coerce")
+        return ((s - 1) / 4).clip(0, 1)
+
+    # ── Build subjective features from specific items ──
+    anxiety = pd.concat([
+        _norm(_find_col("anxiety or tension")),
+        _norm(_find_col("rapid heartbeat")),
+    ], axis=1).mean(axis=1)
+
+    social_isolation = _norm(_find_col("lonely or isolated"))
+
+    confidence_lack = pd.concat([
+        _norm(_find_col("lack confidence in your academic performanc")),
+        _norm(_find_col("overwhelmed with your academic")),
+    ], axis=1).mean(axis=1)
+
+    mood_low = pd.concat([
+        _norm(_find_col("sadness or low mood")),
+        _norm(_find_col("irritated easily")),
+    ], axis=1).mean(axis=1)
+
+    # ── Build target from broader symptom set ──
     symptom_keywords = [
         "experienced stress", "rapid heartbeat", "anxiety or tension",
         "sleep problems", "headaches", "irritated easily",
@@ -274,9 +339,8 @@ def load_stress_survey(path: str = "Stress_Dataset.csv") -> pd.DataFrame | None:
     if len(symptom_cols) < 5:
         return None
 
-    # Average symptom intensity normalized to 0-1
     sym = df[symptom_cols].apply(pd.to_numeric, errors="coerce")
-    cont = ((sym.mean(axis=1) - 1) / 4).clip(0, 1)  # 1-5 scale -> 0-1
+    cont = ((sym.mean(axis=1) - 1) / 4).clip(0, 1)
 
     out = pd.DataFrame({
         "study_hours_per_day":             np.nan,
@@ -286,6 +350,10 @@ def load_stress_survey(path: str = "Stress_Dataset.csv") -> pd.DataFrame | None:
         "gpa_norm":                        np.nan,
         "screen_time_hours":               np.nan,
         "extracurricular_hours":           np.nan,
+        "anxiety_norm":                    anxiety,
+        "social_support_deficit":          social_isolation,
+        "career_concern_norm":             confidence_lack,
+        "mood_norm":                       mood_low,
         "target_continuous":               cont,
     })
     out["target_class"] = out["target_continuous"].apply(
@@ -295,15 +363,17 @@ def load_stress_survey(path: str = "Stress_Dataset.csv") -> pd.DataFrame | None:
     return out.dropna(subset=["target_continuous"])[UNIFIED_COLUMNS]
 
 
-def load_synthetic(path: str = "synthetic_burnout_5k.csv") -> pd.DataFrame | None:
+def load_synthetic(path: str = "synthetic_burnout_25k.csv") -> pd.DataFrame | None:
     """
-    5000 research-grounded synthetic samples from synthetic_burnout.py.
-    Uses Maslach Burnout Inventory + Salmela-Aro patterns (sleep deficit ↔ exhaustion,
-    study × low recovery ↔ cynicism). Class balance ~25/50/25.
+    25,000 research-grounded synthetic samples from synthetic_burnout.py v2.
+    Includes 4 subjective features (anxiety, social_support_deficit, career_concern, mood).
+    Falls back to the older 5k file if the 25k one isn't generated yet.
     """
     df = _safe_csv(path)
     if df is None:
-        return None
+        df = _safe_csv("synthetic_burnout_5k.csv")
+        if df is None:
+            return None
     cls_map = {"Low": 0.15, "Moderate": 0.5, "Medium": 0.5, "High": 0.85}
     out = pd.DataFrame({
         "study_hours_per_day":             pd.to_numeric(df["Study_Hours_Per_Day"], errors="coerce"),
@@ -315,7 +385,21 @@ def load_synthetic(path: str = "synthetic_burnout_5k.csv") -> pd.DataFrame | Non
         "extracurricular_hours":           pd.to_numeric(df["Extracurricular_Hours_Per_Day"], errors="coerce"),
         "target_continuous":               df["Stress_Level"].map(cls_map),
     })
-    out["target_class"] = out["target_continuous"].apply(lambda c: _to_class(c) if pd.notna(c) else np.nan)
+    # Subjective columns — present in 25k file, absent in old 5k file
+    for col_in, col_out in [
+        ("Anxiety_Norm",            "anxiety_norm"),
+        ("Social_Support_Deficit",  "social_support_deficit"),
+        ("Career_Concern_Norm",     "career_concern_norm"),
+        ("Mood_Norm",               "mood_norm"),
+    ]:
+        if col_in in df.columns:
+            out[col_out] = pd.to_numeric(df[col_in], errors="coerce")
+        else:
+            out[col_out] = float("nan")
+
+    out["target_class"] = out["target_continuous"].apply(
+        lambda c: _to_class(c) if pd.notna(c) else np.nan
+    )
     out["source"] = "synthetic"
     return out.dropna(subset=["target_continuous"])[UNIFIED_COLUMNS]
 
