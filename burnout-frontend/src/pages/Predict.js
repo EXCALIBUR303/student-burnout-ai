@@ -606,34 +606,47 @@ function Predict() {
               transition={{ delay: 0.5, duration: 0.4 }}
               style={{ marginTop: 24 }}>
               <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-dim)", marginBottom: 10 }}>
-                Top risk drivers
+                Key factors
               </p>
               {mlResult?.top_drivers?.length > 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {mlResult.top_drivers.map((d) => (
-                    <div key={d.feature} style={{
-                      display: "flex", alignItems: "center", gap: 10,
-                      padding: "10px 14px",
-                      background: d.direction === "risk"
-                        ? "color-mix(in srgb, var(--danger) 8%, transparent)"
-                        : "color-mix(in srgb, var(--success) 8%, transparent)",
-                      border: `1px solid ${d.direction === "risk"
-                        ? "color-mix(in srgb, var(--danger) 25%, transparent)"
-                        : "color-mix(in srgb, var(--success) 25%, transparent)"}`,
-                      borderRadius: "var(--r-md)",
-                    }}>
-                      <span style={{ fontSize: 20 }}>{d.emoji}</span>
-                      <div style={{ flex: 1, textAlign: "left" }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{d.label}</div>
-                        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                          Your value: <strong>{d.value}</strong> · Avg: {d.avg}
+                  {mlResult.top_drivers.map((d) => {
+                    const isRisk = d.direction === "risk";
+                    // On a Low result, even "risk" factors are minor — soften the badge
+                    const softRisk = isRisk && mlResult.label === "Low";
+                    return (
+                      <div key={d.feature} style={{
+                        display: "flex", alignItems: "center", gap: 10,
+                        padding: "10px 14px",
+                        background: isRisk
+                          ? softRisk
+                            ? "color-mix(in srgb, var(--warning) 8%, transparent)"
+                            : "color-mix(in srgb, var(--danger) 8%, transparent)"
+                          : "color-mix(in srgb, var(--success) 8%, transparent)",
+                        border: `1px solid ${isRisk
+                          ? softRisk
+                            ? "color-mix(in srgb, var(--warning) 25%, transparent)"
+                            : "color-mix(in srgb, var(--danger) 25%, transparent)"
+                          : "color-mix(in srgb, var(--success) 25%, transparent)"}`,
+                        borderRadius: "var(--r-md)",
+                      }}>
+                        <span style={{ fontSize: 20 }}>{d.emoji}</span>
+                        <div style={{ flex: 1, textAlign: "left" }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{d.label}</div>
+                          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                            Your value: <strong>{d.value}{d.feature === "gpa_norm" ? "/10" : "h"}</strong>
+                            {" "}· Avg: {d.avg}{d.feature === "gpa_norm" ? "/10" : "h"}
+                          </div>
                         </div>
+                        <span style={{ fontSize: 11, fontWeight: 700,
+                          color: isRisk
+                            ? softRisk ? "var(--warning)" : "var(--danger)"
+                            : "var(--success)" }}>
+                          {isRisk ? (softRisk ? "⚡ Watch" : "⚠ Risk") : "✓ Good"}
+                        </span>
                       </div>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: d.direction === "risk" ? "var(--danger)" : "var(--success)" }}>
-                        {d.direction === "risk" ? "⚠ Risk" : "✓ OK"}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div style={{ padding: "12px 16px", borderRadius: "var(--r-md)",

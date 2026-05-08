@@ -781,25 +781,43 @@ def predict(data: dict, request: Request):
         }
 
         # ── Top drivers ───────────────────────────────────────────────
-        importances = _get_feature_importances(model)
-        total_imp   = sum(importances) or 1.0
-        ranked      = sorted(
-            zip(FEATURE_NAMES, importances),
-            key=lambda x: x[1], reverse=True
-        )
+        # Only use the 7 base (human-readable) input features, not engineered ones.
+        # Rank by how far each value deviates in the risky direction for THIS user.
+        BASE_FEATURES = [
+            "study_hours_per_day", "sleep_hours_per_day", "social_hours_per_day",
+            "physical_activity_hours_per_day", "gpa_norm", "screen_time_hours",
+            "extracurricular_hours",
+        ]
+        driver_scores = []
+        for fname in BASE_FEATURES:
+            meta = FEATURE_META[fname]
+            val  = feature_vals[fname]
+            avg  = meta["avg"]
+            # How far is this value from the safe side?
+            if meta["high_is_risk"]:
+                deviation = val - avg          # positive = risky
+            else:
+                deviation = avg - val          # positive = risky (low when should be high)
+            concerning = deviation > 0
+            driver_scores.append((fname, deviation, concerning))
+
+        # Sort by deviation descending — most concerning first
+        driver_scores.sort(key=lambda x: x[1], reverse=True)
+
         top_drivers = []
-        for fname, imp in ranked[:3]:
-            meta       = FEATURE_META[fname]
-            val        = feature_vals[fname]
-            concerning = (val > meta["avg"]) if meta["high_is_risk"] else (val < meta["avg"])
+        for fname, deviation, concerning in driver_scores[:3]:
+            meta = FEATURE_META[fname]
+            val  = feature_vals[fname]
+            # For gpa_norm, display as 0-10 scale for readability
+            display_val = round(val * 10, 1) if fname == "gpa_norm" else round(val, 1)
+            display_avg = round(meta["avg"] * 10, 1) if fname == "gpa_norm" else meta["avg"]
             top_drivers.append({
-                "feature":        fname,
-                "label":          meta["label"],
-                "emoji":          meta["emoji"],
-                "value":          round(val, 2),
-                "avg":            meta["avg"],
-                "direction":      "risk" if concerning else "ok",
-                "importance_pct": round(float(imp / total_imp * 100), 1),
+                "feature":   fname,
+                "label":     meta["label"],
+                "emoji":     meta["emoji"],
+                "value":     display_val,
+                "avg":       display_avg,
+                "direction": "risk" if concerning else "ok",
             })
 
         # ── Persist ───────────────────────────────────────────────────
