@@ -145,15 +145,20 @@ _V2_PKL = "stress_model.pkl"
 
 model = None
 _active_pkl = "none"
+_load_errors = {}  # {pkl_name: error_message} — exposed via /debug/model
 for _pkl in [_V5_PKL, _V4_PKL, _V3_PKL, _V2_PKL]:
     if os.path.exists(_pkl):
         try:
             model = joblib.load(_pkl)
             _active_pkl = _pkl
-            print(f"[model] loaded {_pkl} ✅")
+            print(f"[model] loaded {_pkl} OK")
             break
         except Exception as _e:
-            print(f"[model] failed to load {_pkl}: {_e}")
+            err = f"{type(_e).__name__}: {_e}"
+            _load_errors[_pkl] = err[:500]
+            print(f"[model] failed to load {_pkl}: {err}")
+    else:
+        _load_errors[_pkl] = "FILE_NOT_PRESENT"
 
 if model is None:
     print("[model] ⚠️  No model loaded — /predict will return error. Check pkl files.")
@@ -491,6 +496,36 @@ def home():
 def ping():
     """Keep-alive endpoint — frontend pings this every 14 min to prevent Railway cold starts."""
     return {"ok": True}
+
+
+@app.get("/debug/model")
+def debug_model():
+    """Diagnostic — shows which model loaded and why others failed."""
+    import sys
+    try:
+        import sklearn, xgboost, lightgbm
+        versions = {
+            "python":   sys.version.split()[0],
+            "sklearn":  sklearn.__version__,
+            "xgboost":  xgboost.__version__,
+            "lightgbm": lightgbm.__version__,
+        }
+    except Exception as e:
+        versions = {"error": str(e)}
+
+    file_listing = {}
+    for pkl in ["stress_model_v5.pkl", "stress_model_v4.pkl", "stress_model_v3.pkl", "stress_model.pkl"]:
+        if os.path.exists(pkl):
+            file_listing[pkl] = {"present": True, "size_mb": round(os.path.getsize(pkl) / 1e6, 2)}
+        else:
+            file_listing[pkl] = {"present": False}
+
+    return {
+        "active_model":  _active_pkl,
+        "load_errors":   _load_errors,
+        "files_on_disk": file_listing,
+        "versions":      versions,
+    }
 
 
 @app.post("/register")
