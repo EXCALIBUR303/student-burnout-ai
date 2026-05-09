@@ -944,6 +944,24 @@ def predict(data: dict, request: Request):
         #   proba[0] = P(High),  proba[1] = P(Low),  proba[2] = P(Medium)
         proba      = model.predict_proba(df)[0]
         confidence = round(float(max(proba)) * 100, 1)
+
+        # ── Low-risk rule-based override ──────────────────────────────
+        # CalibratedClassifierCV (v3) isotonic calibration suppresses P(Low)
+        # below P(Medium) even for clearly healthy inputs.
+        # Override Medium → Low when objective profile signals low stress.
+        if result_label == "Medium":
+            _low_signals = (
+                int(study               <= 5.5) +
+                int(sleep               >= 7.0) +
+                int(social              >= 1.0) +
+                int(physical            >= 0.5) +
+                int(screen              <= 5.0) +
+                int(study_sleep_ratio   <= 0.80)
+            )
+            # Require 5/6 objective signals AND user not feeling very stressed
+            if _low_signals >= 5 and mood_norm <= 0.60:
+                result_label = "Low"
+                confidence   = max(round(float(proba[1]) * 100, 1), 45.0)
         probabilities = {
             "low":    round(float(proba[1]) * 100, 1),
             "medium": round(float(proba[2]) * 100, 1),
