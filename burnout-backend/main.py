@@ -251,8 +251,13 @@ FEATURE_META = {
 # DB_PATH lets Railway users point to a persistent volume (e.g. /data/burnout.db)
 # Set DB_PATH env var in Railway → Settings → Variables, then add a Volume at /data
 _DB_PATH = os.environ.get("DB_PATH", "burnout.db")
-conn = sqlite3.connect(_DB_PATH, check_same_thread=False)
-print(f"[db] using {_DB_PATH}")
+try:
+    conn = sqlite3.connect(_DB_PATH, check_same_thread=False)
+    print(f"[db] using {_DB_PATH}")
+except Exception as _db_open_err:
+    print(f"[db] WARNING: cannot open {_DB_PATH}: {_db_open_err} — falling back to :memory:")
+    _DB_PATH = ":memory:"
+    conn = sqlite3.connect(":memory:", check_same_thread=False)
 cursor = conn.cursor()
 cursor.execute("""
     CREATE TABLE IF NOT EXISTS predictions (
