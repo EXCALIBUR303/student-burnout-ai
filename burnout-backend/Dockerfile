@@ -26,6 +26,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the backend
 COPY . .
 
-# Railway provides $PORT at runtime; bind to it
 ENV PYTHONUNBUFFERED=1
-CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
+
+# Railway provides $PORT at runtime. We MUST use explicit `sh -c` exec form
+# so the variable is expanded by the shell (not passed as literal "$PORT" to
+# uvicorn). Shell-form CMD on Railway's Docker runner had been passing the
+# raw string -> uvicorn errored with: "Invalid value for '--port': '$PORT'".
+CMD ["sh", "-c", "exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
