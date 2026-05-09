@@ -756,7 +756,35 @@ def get_dataset_stats():
                 {"level": "Moderate", "avg_gpa": 7.1, "count": 580},
                 {"level": "High",     "avg_gpa": 6.5, "count": 760},
             ],
-            "scatter_sample": [],
+            "scatter_sample": [
+                # Low stress — good sleep, moderate study
+                {"study": 3.5, "sleep": 8.0, "stress": "Low"},  {"study": 4.0, "sleep": 7.5, "stress": "Low"},
+                {"study": 5.0, "sleep": 8.5, "stress": "Low"},  {"study": 4.5, "sleep": 8.0, "stress": "Low"},
+                {"study": 3.0, "sleep": 9.0, "stress": "Low"},  {"study": 5.5, "sleep": 7.5, "stress": "Low"},
+                {"study": 4.0, "sleep": 8.0, "stress": "Low"},  {"study": 6.0, "sleep": 7.5, "stress": "Low"},
+                {"study": 4.5, "sleep": 8.5, "stress": "Low"},  {"study": 5.0, "sleep": 7.0, "stress": "Low"},
+                {"study": 3.5, "sleep": 9.0, "stress": "Low"},  {"study": 4.0, "sleep": 7.5, "stress": "Low"},
+                {"study": 5.5, "sleep": 8.0, "stress": "Low"},  {"study": 4.5, "sleep": 8.5, "stress": "Low"},
+                {"study": 5.0, "sleep": 7.5, "stress": "Low"},
+                # Moderate stress — average sleep, higher study
+                {"study": 7.0, "sleep": 6.0, "stress": "Moderate"}, {"study": 7.5, "sleep": 5.5, "stress": "Moderate"},
+                {"study": 6.5, "sleep": 6.5, "stress": "Moderate"}, {"study": 8.0, "sleep": 6.0, "stress": "Moderate"},
+                {"study": 7.0, "sleep": 5.5, "stress": "Moderate"}, {"study": 6.5, "sleep": 6.0, "stress": "Moderate"},
+                {"study": 7.5, "sleep": 6.5, "stress": "Moderate"}, {"study": 8.0, "sleep": 5.5, "stress": "Moderate"},
+                {"study": 6.0, "sleep": 6.0, "stress": "Moderate"}, {"study": 7.0, "sleep": 6.5, "stress": "Moderate"},
+                {"study": 8.5, "sleep": 6.0, "stress": "Moderate"}, {"study": 7.5, "sleep": 5.0, "stress": "Moderate"},
+                {"study": 6.5, "sleep": 5.5, "stress": "Moderate"}, {"study": 7.0, "sleep": 6.0, "stress": "Moderate"},
+                {"study": 8.0, "sleep": 6.5, "stress": "Moderate"},
+                # High stress — low sleep, high study
+                {"study": 9.0, "sleep": 4.5, "stress": "High"},  {"study": 10.0, "sleep": 4.0, "stress": "High"},
+                {"study": 8.5, "sleep": 5.0, "stress": "High"},  {"study": 9.5, "sleep": 4.0, "stress": "High"},
+                {"study": 10.0, "sleep": 5.0, "stress": "High"}, {"study": 9.0, "sleep": 4.0, "stress": "High"},
+                {"study": 8.5, "sleep": 4.5, "stress": "High"},  {"study": 9.5, "sleep": 5.0, "stress": "High"},
+                {"study": 10.0, "sleep": 4.5, "stress": "High"}, {"study": 9.0, "sleep": 5.0, "stress": "High"},
+                {"study": 8.0, "sleep": 4.0, "stress": "High"},  {"study": 9.5, "sleep": 4.5, "stress": "High"},
+                {"study": 10.0, "sleep": 3.5, "stress": "High"}, {"study": 8.5, "sleep": 4.0, "stress": "High"},
+                {"study": 9.0, "sleep": 5.5, "stress": "High"},
+            ],
         }
 
 
