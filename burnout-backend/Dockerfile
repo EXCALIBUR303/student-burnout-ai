@@ -4,11 +4,14 @@
 #
 # When this image is detected, Railway uses it instead of nixpacks.
 
-FROM python:3.13-slim
+FROM python:3.12-slim
+# Why 3.12 instead of 3.13: the slim image for 3.13 doesn't ship pre-built
+# wheels for numpy 2.0.2, pandas 2.3.3, etc., and slim images lack the
+# compilers to build from source — pip fails with "metadata-generation-failed
+# (numpy)". Python 3.12 has wheels for everything in requirements.txt.
 
 # System deps:
 #   libgomp1 — GNU OpenMP runtime (required by LightGBM and XGBoost C extensions)
-#   build-essential — only here in case any wheel needs to compile from source
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libgomp1 \
     && apt-get clean \
