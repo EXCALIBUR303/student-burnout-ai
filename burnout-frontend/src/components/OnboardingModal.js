@@ -92,7 +92,7 @@ export default function OnboardingModal({ onClose }) {
           </motion.div>
         </AnimatePresence>
 
-        <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+        <div style={{ display: "flex", gap: 12, width: "100%" }}>
           {step > 0 && (
             <button onClick={() => setStep(s => s - 1)} style={{
               padding: "11px 22px", borderRadius: "var(--r-md)",
