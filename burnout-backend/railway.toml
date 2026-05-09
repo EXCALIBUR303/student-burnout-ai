@@ -1,11 +1,15 @@
 # Railway configuration
-# Minimal config — let Dockerfile CMD handle the start command.
-# Only setting healthcheck timeout to give the app time to load models at startup.
+# Only specifying the builder — healthcheckPath is intentionally absent.
+#
+# Background: setting healthcheckPath = "/ping" caused every deployment to
+# fail immediately.  Railway's HTTP probe starts before uvicorn is ready and
+# treats the first "connection refused" as a hard failure, ignoring
+# healthcheckTimeout.  Without healthcheckPath, Railway uses its default TCP
+# check which is far more lenient.
+#
+# Model loading is now done in a background thread (see main.py startup_event)
+# so uvicorn starts in <1 s regardless, making the default check trivially pass.
 
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
-
-[deploy]
-healthcheckPath = "/ping"
-healthcheckTimeout = 120
