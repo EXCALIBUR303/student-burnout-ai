@@ -34,6 +34,10 @@ ENV PYTHONUNBUFFERED=1
 ENV OMP_NUM_THREADS=1
 ENV OPENBLAS_NUM_THREADS=1
 ENV MKL_NUM_THREADS=1
+# GOMP_SPINCOUNT=0: tell GNU OpenMP not to spin-wait before sleeping.
+# Default spin-wait can deadlock indefinitely in cgroups-constrained containers
+# (Railway, Cloud Run, etc.) when the thread pool can't acquire CPU time.
+ENV GOMP_SPINCOUNT=0
 
 # Railway provides $PORT at runtime. We MUST use explicit `sh -c` exec form
 # so the variable is expanded by the shell (not passed as literal "$PORT" to
