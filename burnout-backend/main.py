@@ -143,9 +143,10 @@ _V4_PKL = "stress_model_v4.pkl"
 _V3_PKL = "stress_model_v3.pkl"
 _V2_PKL = "stress_model.pkl"
 
+import traceback as _traceback
 model = None
 _active_pkl = "none"
-_load_errors = {}  # {pkl_name: error_message} — exposed via /debug/model
+_load_errors = {}  # {pkl_name: full_traceback} — exposed via /debug/model
 # Load priority: v5 → v3 (skip v4 — 29 MB pkl causes cold-start OOM/timeout)
 # v4 used calibration wrapper which broke predictions anyway; v3 is the reliable baseline.
 for _pkl in [_V5_PKL, _V3_PKL, _V2_PKL]:
@@ -156,9 +157,10 @@ for _pkl in [_V5_PKL, _V3_PKL, _V2_PKL]:
             print(f"[model] loaded {_pkl} OK")
             break
         except Exception as _e:
-            err = f"{type(_e).__name__}: {_e}"
-            _load_errors[_pkl] = err[:500]
-            print(f"[model] failed to load {_pkl}: {err}")
+            _tb = _traceback.format_exc()
+            _load_errors[_pkl] = _tb[-2000:]  # last 2000 chars — enough for the root cause
+            print(f"[model] failed to load {_pkl}: {type(_e).__name__}: {_e}")
+            print(_tb)
     else:
         _load_errors[_pkl] = "FILE_NOT_PRESENT"
 
