@@ -184,7 +184,10 @@ else:
 def _is_v5() -> bool:
     return _active_pkl == _V5_PKL
 
-labels = {0: "Low", 1: "Medium", 2: "High"}
+# sklearn LabelEncoder sorts labels alphabetically at training time:
+#   "High" → 0,  "Low" → 1,  "Moderate"/"Medium" → 2
+# So model class 0 = High burnout, class 1 = Low, class 2 = Medium.
+labels = {0: "High", 1: "Low", 2: "Medium"}
 
 # Feature name lists — selected based on which model is loaded.
 # v5: 7 objective + 4 subjective + 7 engineered = 18 features
@@ -870,8 +873,8 @@ def predict(data: dict, request: Request):
         # ── Base features (7) ─────────────────────────────────────────
         study    = float(data.get("study_hours_per_day", 0))
         sleep    = float(data.get("sleep_hours_per_day", 0))
-        social   = float(data.get("social_hours_per_day", 0))
-        physical = float(data.get("physical_activity_hours_per_day", 0))
+        social   = float(data.get("social_hours_per_day",               1.5))  # default avoids productive_vs_leisure explosion
+        physical = float(data.get("physical_activity_hours_per_day",   0.5))
         gpa_norm = float(data.get("gpa_norm", 0.70))          # normalised 0-1
         screen   = float(data.get("screen_time_hours", 2.0))  # daily screen hours
         extra    = float(data.get("extracurricular_hours", 1.0))
@@ -937,12 +940,14 @@ def predict(data: dict, request: Request):
         result_label = labels.get(int(prediction), "Unknown")
 
         # ── Confidence ────────────────────────────────────────────────
+        # proba indices follow sklearn alphabetical encoding:
+        #   proba[0] = P(High),  proba[1] = P(Low),  proba[2] = P(Medium)
         proba      = model.predict_proba(df)[0]
         confidence = round(float(max(proba)) * 100, 1)
         probabilities = {
-            "low":    round(float(proba[0]) * 100, 1),
-            "medium": round(float(proba[1]) * 100, 1),
-            "high":   round(float(proba[2]) * 100, 1),
+            "low":    round(float(proba[1]) * 100, 1),
+            "medium": round(float(proba[2]) * 100, 1),
+            "high":   round(float(proba[0]) * 100, 1),
         }
 
         # ── Top drivers ───────────────────────────────────────────────
@@ -1022,9 +1027,12 @@ def predict(data: dict, request: Request):
         except Exception as _shap_err:
             print(f"[shap] skipped: {_shap_err}")
 
+        # risk: frontend expects 0=Low, 1=Medium, 2=High
+        risk_level = {"Low": 0, "Medium": 1, "High": 2}.get(result_label, 0)
+
         return {
             "prediction":    result_label,
-            "risk":          int(prediction),
+            "risk":          risk_level,
             "confidence":    confidence,
             "probabilities": probabilities,
             "top_drivers":   top_drivers,
