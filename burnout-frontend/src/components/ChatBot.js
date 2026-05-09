@@ -136,8 +136,23 @@ const getStarters = (burnoutResult) => {
 
 const QUICK_REPLIES = ["Tell me more", "What should I try tonight?", "Why does this happen?", "How long will it take?"];
 
+// Parse risk level from userContext string (e.g. "High burnout risk. Studies 9h/day...")
+// Falls back to legacy burnoutResult key if userContext is empty
+const parseBurnoutResult = (userContext) => {
+  if (userContext) {
+    const m = userContext.match(/^(High|Low|Moderate|Medium)\s+burnout/i);
+    if (m) {
+      const lvl = m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase();
+      if (lvl === "High")     return "High Burnout";
+      if (lvl === "Low")      return "Low Burnout";
+      return "Medium Burnout"; // Moderate / Medium
+    }
+  }
+  return localStorage.getItem("burnoutResult") || null;
+};
+
 export default function ChatBot({ userContext = "", onClose, forceOpen }) {
-  const burnoutResult = localStorage.getItem("burnoutResult") || null;
+  const burnoutResult = parseBurnoutResult(userContext);
   const starters      = getStarters(burnoutResult);
 
   const greeting = burnoutResult
