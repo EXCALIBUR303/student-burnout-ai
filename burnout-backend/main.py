@@ -146,7 +146,9 @@ _V2_PKL = "stress_model.pkl"
 model = None
 _active_pkl = "none"
 _load_errors = {}  # {pkl_name: error_message} — exposed via /debug/model
-for _pkl in [_V5_PKL, _V4_PKL, _V3_PKL, _V2_PKL]:
+# Load priority: v5 → v3 (skip v4 — 29 MB pkl causes cold-start OOM/timeout)
+# v4 used calibration wrapper which broke predictions anyway; v3 is the reliable baseline.
+for _pkl in [_V5_PKL, _V3_PKL, _V2_PKL]:
     if os.path.exists(_pkl):
         try:
             model = joblib.load(_pkl)
