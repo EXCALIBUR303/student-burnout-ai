@@ -1,11 +1,10 @@
 # Railway deployment config
-# startCommand overrides Procfile so Railway runs through sh (PORT expands correctly).
-# No healthcheckPath — Railway uses default TCP probe which is far more lenient
-# than HTTP probing during model load.
-
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "uvicorn main:app --host 0.0.0.0 --port $PORT"
+# Use the shell script baked into the image — Railway runs startCommand in
+# exec form (no shell), so $PORT would be passed literally. The script has
+# #!/bin/sh so sh expands ${PORT:-8000} to the real port number.
+startCommand = "/app/start.sh"
