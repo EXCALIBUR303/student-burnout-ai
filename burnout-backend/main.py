@@ -128,19 +128,6 @@ JWT_EXPIRY_DAYS = 7
 
 app = FastAPI()
 
-
-@app.on_event("startup")
-async def startup_event():
-    """Start model loading in a background thread so uvicorn is ready instantly.
-
-    Railway's healthcheck hits /ping which doesn't touch the model — it will
-    pass within 1-2 seconds even if model loading takes 20+ seconds.
-    """
-    t = _threading.Thread(target=_load_model_background, daemon=True, name="model-loader")
-    t.start()
-    print("[startup] model loader thread started — uvicorn accepting requests now")
-
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -150,60 +137,53 @@ app.add_middleware(
 )
 
 # ===== MODEL =====
-import numpy as np  # needed for feature importance averaging across calibration folds
+# Import xgboost and lightgbm eagerly (in the main thread, before asyncio starts)
+# so their OpenMP/C++ thread pools initialise once under OMP_NUM_THREADS=1.
+# Deferring these imports to a background thread while asyncio is running can
+# cause a segfault on Linux (pthread_create vs. asyncio signal-fd conflict).
+import numpy as np
+import xgboost as _xgb    # noqa: F401 — ensures XGBoost is imported before uvicorn loop
+import lightgbm as _lgb   # noqa: F401 — ensures LightGBM is imported before uvicorn loop
+
 _V5_PKL = "stress_model_v5.pkl"
 _V4_PKL = "stress_model_v4.pkl"
 _V3_PKL = "stress_model_v3.pkl"
 _V2_PKL = "stress_model.pkl"
 
 import traceback as _traceback
-import threading as _threading
 
 model = None
 _active_pkl = "none"
 _load_errors = {}   # {pkl_name: full_traceback} — exposed via /debug/model
-_model_ready = False  # True once model loading finishes (success OR failure)
-_model_lock  = _threading.Lock()
+_model_ready = False  # set True once loading finishes (kept for API compat)
 
-
-def _load_model_background():
-    """Load the best available model in a background thread.
-
-    Running this off the main thread means uvicorn starts instantly and the
-    Railway healthcheck passes in <1 s.  /predict returns 503 until loading
-    finishes, which typically takes 5-20 s for the 8-9 MB pkl files.
-    """
-    global model, _active_pkl, _load_errors, _model_ready
-
-    print("[model] background loader started")
-    # Load priority: v5 → v3 (skip v4 — 29 MB pkl causes cold-start OOM/timeout)
-    for _pkl in [_V5_PKL, _V3_PKL, _V2_PKL]:
-        if os.path.exists(_pkl):
-            try:
-                with _model_lock:
-                    _m = joblib.load(_pkl)
-                    model      = _m
-                    _active_pkl = _pkl
-                print(f"[model] loaded {_pkl} OK")
-                break
-            except Exception as _e:
-                _tb = _traceback.format_exc()
-                with _model_lock:
-                    _load_errors[_pkl] = _tb[-2000:]
-                print(f"[model] failed to load {_pkl}: {type(_e).__name__}: {_e}")
-                print(_tb)
-        else:
-            with _model_lock:
-                _load_errors[_pkl] = "FILE_NOT_PRESENT"
-            print(f"[model] {_pkl} not present on disk")
-
-    with _model_lock:
-        _model_ready = True
-
-    if model is None:
-        print("[model] ⚠️  No model loaded — /predict will return 503. Check /debug/model.")
+# Load priority: v5 → v3 (skip v4 — 29 MB pkl causes cold-start OOM/timeout).
+# Run synchronously at module level — must complete before uvicorn accepts
+# connections, but xgboost/lightgbm are already imported above so this is
+# just joblib.load (disk I/O + numpy deserialisation, typically 5-15 s).
+print("[model] loading...")
+for _pkl in [_V5_PKL, _V3_PKL, _V2_PKL]:
+    if os.path.exists(_pkl):
+        try:
+            model = joblib.load(_pkl)
+            _active_pkl = _pkl
+            print(f"[model] loaded {_pkl} OK")
+            break
+        except Exception as _e:
+            _tb = _traceback.format_exc()
+            _load_errors[_pkl] = _tb[-2000:]
+            print(f"[model] failed to load {_pkl}: {type(_e).__name__}: {_e}")
+            print(_tb)
     else:
-        print(f"[model] ✅ ready — serving {_active_pkl}")
+        _load_errors[_pkl] = "FILE_NOT_PRESENT"
+        print(f"[model] {_pkl} not present on disk")
+
+_model_ready = True  # loading finished (success or all-failed)
+
+if model is None:
+    print("[model] ⚠️  No model loaded — /predict will return error. Check /debug/model.")
+else:
+    print(f"[model] ✅ serving {_active_pkl}")
 
 # _IS_V5 is re-evaluated in /predict after model loads.
 # It's also exposed as a helper below for endpoints that run after loading finishes.
@@ -825,14 +805,6 @@ def cohort_stats(request: Request):
 
 @app.post("/predict")
 def predict(data: dict, request: Request):
-    if not _model_ready:
-        # Container just started — model is loading in background; should be ready in <30 s
-        from fastapi.responses import JSONResponse
-        return JSONResponse(
-            status_code=503,
-            content={"error": "Model loading, please retry in a few seconds"},
-            headers={"Retry-After": "10"},
-        )
     if model is None:
         return {"error": "Model not loaded — check /debug/model for details"}
     try:
