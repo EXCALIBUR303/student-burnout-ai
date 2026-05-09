@@ -157,18 +157,12 @@ function App() {
     // ── localStorage version guard ──────────────────────────────────
     // If data was saved in the old flat format (before Predict.js redesign),
     // the chatbot context builder breaks. Clear stale keys safely.
-    const APP_VERSION = "2";
+    const APP_VERSION = "3";
     if (localStorage.getItem("appVersion") !== APP_VERSION) {
-      ["burnoutAnswers", "burnoutFeatures", "burnoutResult", "burnoutRisk"].forEach(
+      // Clear all stale keys — prediction labels were inverted before v3 model fix
+      ["burnoutAnswers", "burnoutFeatures", "burnoutResult", "burnoutRisk", "lastPrediction"].forEach(
         (k) => localStorage.removeItem(k)
       );
-      // Keep lastPrediction only if it has the new nested features format
-      try {
-        const last = JSON.parse(localStorage.getItem("lastPrediction") || "{}");
-        if (!last.features) localStorage.removeItem("lastPrediction");
-      } catch {
-        localStorage.removeItem("lastPrediction");
-      }
       localStorage.setItem("appVersion", APP_VERSION);
     }
 
