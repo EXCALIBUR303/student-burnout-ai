@@ -56,7 +56,26 @@ const FALLBACK = {
     { level: "Moderate", avg_gpa: 2.89, count: 580 },
     { level: "High",     avg_gpa: 2.44, count: 760 },
   ],
-  scatter_sample: [],
+  scatter_sample: [
+    // Low stress — good sleep, low-moderate study
+    {study:3.5,sleep:8.0,stress:"Low"},{study:4.0,sleep:7.5,stress:"Low"},{study:4.5,sleep:8.5,stress:"Low"},
+    {study:5.0,sleep:8.0,stress:"Low"},{study:3.0,sleep:9.0,stress:"Low"},{study:4.0,sleep:8.0,stress:"Low"},
+    {study:5.5,sleep:7.5,stress:"Low"},{study:3.5,sleep:8.5,stress:"Low"},{study:4.5,sleep:7.0,stress:"Low"},
+    {study:5.0,sleep:7.5,stress:"Low"},{study:4.0,sleep:9.0,stress:"Low"},{study:3.0,sleep:8.0,stress:"Low"},
+    {study:6.0,sleep:7.5,stress:"Low"},{study:4.5,sleep:8.0,stress:"Low"},{study:5.5,sleep:8.5,stress:"Low"},
+    // Moderate stress — average sleep, higher study
+    {study:7.0,sleep:6.0,stress:"Moderate"},{study:7.5,sleep:5.5,stress:"Moderate"},{study:6.5,sleep:6.5,stress:"Moderate"},
+    {study:8.0,sleep:6.0,stress:"Moderate"},{study:7.0,sleep:5.5,stress:"Moderate"},{study:6.5,sleep:6.0,stress:"Moderate"},
+    {study:7.5,sleep:6.5,stress:"Moderate"},{study:8.0,sleep:5.5,stress:"Moderate"},{study:6.0,sleep:6.0,stress:"Moderate"},
+    {study:7.0,sleep:6.5,stress:"Moderate"},{study:8.5,sleep:6.0,stress:"Moderate"},{study:7.5,sleep:5.0,stress:"Moderate"},
+    {study:6.5,sleep:5.5,stress:"Moderate"},{study:7.0,sleep:6.0,stress:"Moderate"},{study:8.0,sleep:6.5,stress:"Moderate"},
+    // High stress — low sleep, high study
+    {study:9.0,sleep:4.5,stress:"High"},{study:10.0,sleep:4.0,stress:"High"},{study:8.5,sleep:5.0,stress:"High"},
+    {study:9.5,sleep:4.0,stress:"High"},{study:10.0,sleep:5.0,stress:"High"},{study:9.0,sleep:4.0,stress:"High"},
+    {study:8.5,sleep:4.5,stress:"High"},{study:9.5,sleep:5.0,stress:"High"},{study:10.0,sleep:4.5,stress:"High"},
+    {study:9.0,sleep:5.0,stress:"High"},{study:8.0,sleep:4.0,stress:"High"},{study:9.5,sleep:4.5,stress:"High"},
+    {study:10.0,sleep:3.5,stress:"High"},{study:8.5,sleep:4.0,stress:"High"},{study:9.0,sleep:5.5,stress:"High"},
+  ],
 };
 
 // ─── Helper components ────────────────────────────────────────────────────────
@@ -407,9 +426,9 @@ export default function Dashboard() {
   ];
 
   const pieData = [
-    { name: "Low",      value: s.low },
-    { name: "Moderate", value: s.moderate },
-    { name: "High",     value: s.high },
+    { name: "Low",      value: s.low,      pct: s.low_pct      ?? Math.round(s.low / s.total * 100) },
+    { name: "Moderate", value: s.moderate, pct: s.moderate_pct ?? Math.round(s.moderate / s.total * 100) },
+    { name: "High",     value: s.high,     pct: s.high_pct     ?? Math.round(s.high / s.total * 100) },
   ];
 
   const gpaLow  = s.gpa_by_stress?.find(g => g.level === "Low")?.avg_gpa      ?? 3.21;
@@ -559,7 +578,7 @@ export default function Dashboard() {
                       formatter={(value, name) => [`${value}%`, name]} />
                     <Legend
                       wrapperStyle={{ color: "var(--text-muted)", fontSize: 12, paddingTop: 8 }}
-                      formatter={(value, entry) => `${value} ${entry.payload.value}%`}
+                      formatter={(value, entry) => `${value}  ${entry.payload.pct}%`}
                     />
                   </PieChart>
                 </ResponsiveContainer>
