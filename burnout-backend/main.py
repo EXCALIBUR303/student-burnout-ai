@@ -137,13 +137,7 @@ app.add_middleware(
 )
 
 # ===== MODEL =====
-# Import xgboost and lightgbm eagerly (in the main thread, before asyncio starts)
-# so their OpenMP/C++ thread pools initialise once under OMP_NUM_THREADS=1.
-# Deferring these imports to a background thread while asyncio is running can
-# cause a segfault on Linux (pthread_create vs. asyncio signal-fd conflict).
 import numpy as np
-import xgboost as _xgb    # noqa: F401 — ensures XGBoost is imported before uvicorn loop
-import lightgbm as _lgb   # noqa: F401 — ensures LightGBM is imported before uvicorn loop
 
 _V5_PKL = "stress_model_v5.pkl"
 _V4_PKL = "stress_model_v4.pkl"
