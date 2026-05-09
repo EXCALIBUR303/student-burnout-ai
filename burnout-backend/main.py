@@ -156,7 +156,7 @@ _model_ready = False  # set True once loading finishes (kept for API compat)
 # connections, but xgboost/lightgbm are already imported above so this is
 # just joblib.load (disk I/O + numpy deserialisation, typically 5-15 s).
 print("[model] loading...")
-for _pkl in [_V5_PKL, _V3_PKL, _V2_PKL]:
+for _pkl in [_V3_PKL, _V2_PKL]:  # v5 skipped — LightGBM stacking crashes Railway container
     if os.path.exists(_pkl):
         try:
             model = joblib.load(_pkl)
